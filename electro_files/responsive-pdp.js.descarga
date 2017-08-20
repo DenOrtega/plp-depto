@@ -1,0 +1,91 @@
+jQuery(document).ready(function($) {
+  
+     //En casoe de IE, ignorar funciones responsive
+     if(jQuery.browser.msie && parseFloat(jQuery.browser.version) <= 8){
+       return;
+     }
+
+      if(jQuery('#productQty label').html() == 'Cant'){
+          setTimeout(function() {
+            var crea = "CANT.";
+            jQuery('#productQty label').html(crea);
+          }, 1000);  
+      }
+      
+    function CambiaDiseno(){ 
+      document.getElementById("CarroProdTotalMobile2").addEventListener("DOMSubtreeModified", handler, true);
+ 
+      function handler(){
+        setTimeout(function() {
+          jQuery(".hiddenTable").css( "overflow","unset" );
+          jQuery(".description_fixedwidth a").addClass('TituloProducto');
+        }, 1000);
+      }
+  
+      jQuery( ".close" ).click(function() {      
+        setTimeout(function() {
+          jQuery(".hiddenTable").css( "overflow","hidden" );
+          jQuery(".description_fixedwidth a").removeClass('TituloProducto'); 
+        }, 1000);
+      });  
+    }  
+
+    jQuery( ".button-wrapper-radius" ).click(function() {
+        dojo.subscribe("ajaxRequestCompleted", CambiaDiseno);
+    });   
+
+
+/*MHTN: CLICK AND COLLECT Modal show and hidden "Simula tu entrega" in PDP made by Miguel.Penaloza*/
+jQuery('.Modal-pdp_rt').magnificPopup({
+		type: 'inline',
+		preloader: false,
+		focus: '#username',
+		modal: true
+	});
+
+jQuery('.Modal-pdp_dp').magnificPopup({
+    type: 'inline',
+    preloader: false,
+    focus: '#username',
+    modal: true
+});
+	
+	jQuery(document).on('click', '#contenedor_cerrar', function (e) {
+    		e.preventDefault();
+    		jQuery.magnificPopup.close();  
+	});
+	
+
+
+    /*MHTN: Click and collect - no modal new style for error comuna in modal  DESPACHO A DOMICILIO made by Miguel.Penaloza*/
+    /*jQuery('#despachoAddressEntryForm_address3_1').change(function(){
+                valor= jQuery('#despachoAddressEntryForm_address3_1').val();
+                if(valor=='Selecciona una comuna'){   
+                  document.getElementById('alerta').innerHTML='<p class="error-responsive"> Debes seleccionar una comuna</p>';
+                }else{  
+                  document.getElementById('alerta').innerHTML='<p></p>';  
+                }
+              });*/
+    /*MHTN: Click and Collect */
+	 jQuery('#list_unidadesname').change(function(){
+	    valor= jQuery('#list_unidadesname').val();
+
+    /*MHTN Defect 542 - add function jquery fon hidden text "Direccion" */
+    if(valor==1){  jQuery("#contenedor_direccion span").addClass('ocultar');  }
+    else{ jQuery("#contenedor_direccion span").removeClass('ocultar'); }
+
+	  document.getElementById("despatchoCost").style.display = "none";
+		document.getElementById("errorMessage").style.display = "none";
+		document.getElementById("contenedor_resultados").style.display = "none";
+		document.getElementById("physicalStoreErr").style.display = "none";
+	    
+	  });
+
+});
+
+
+//START: CenReqNum#796
+function Mensaje(){
+  jQuery(".error-responsive").remove();
+}
+//END: CenReqNum#796

@@ -1,0 +1,82 @@
+jQuery(document).ready(function($) {
+	
+	   //En casoe de IE, ignorar funciones responsive
+	   if(jQuery.browser.msie && parseFloat(jQuery.browser.version) <= 8){
+		   return;
+	   }
+	   	
+	   if(!window.matchMedia){
+			return;
+		} 
+	   		
+	   jQuery.breakpoint({
+	        condition: function () {
+	            return window.matchMedia('only screen and (max-width:640px)').matches;
+	            },
+	            enter: function () {		
+			   		/*Top Categoria*/
+			   		
+					var _idTop = jQuery('#responsive-topcategoria-id').val();
+					
+					if(jQuery('.categoria_top_'+_idTop).length > 0){
+					      
+					    jQuery(".target_top_menu_categorias").html(jQuery('.categoria_top_'+_idTop).parent().html());
+					    jQuery('.target_top_menu_categorias .categoria_top_'+_idTop).hide();
+					    jQuery('.target_top_menu_categorias .categoria_top_'+_idTop).next().show();
+					}
+					
+					/*Funcionalidad menu*/
+					jQuery('.target_top_menu_categorias ul.desplegable>li').addClass('cerrar');
+					jQuery('.target_top_menu_categorias ul.desplegable>li div.bold').append('<span class="active">+</span>');
+								
+					jQuery('.target_top_menu_categorias ul.desplegable>li').on('click', function(e) {
+		                e.preventDefault();
+						e.stopPropagation();
+		                _this = jQuery(this);
+            
+		            if(_this.hasClass('abrir')){	
+		            	
+		            	_this.addClass('cerrar');
+		                	_this.removeClass('abrir');                	
+		                	_this.find('div .active').html('+');
+		                	//_this.find('ul').slideToggle(600);
+		                	_this.find('ul').hide();
+		                }else{
+		                	
+		                	jQuery('.abrir').each(function( index ) {
+			                       jQuery('.submenu-subcat').hide();
+			                        jQuery('.target_top_menu_categorias ul.desplegable>li').removeClass('abrir');
+			                        jQuery('.target_top_menu_categorias ul.desplegable>li').addClass('cerrar');
+			                        jQuery('.target_top_menu_categorias ul.desplegable>li div .active').html('+');
+			                 });
+		                	
+		                	_this.removeClass('cerrar');
+		                	_this.addClass('abrir');
+		                	//_this.find('ul').slideToggle(600);
+		                	_this.find('div .active').html('-');
+		                	_this.find('ul').show();
+		                }
+		            });
+					
+					jQuery('.target_top_menu_categorias ul.desplegable>li a').on('click', function(e) {
+						e.stopPropagation();
+					});
+					
+		    		var _titulo = jQuery('#content769 h1').html();
+		    		jQuery('#target_titulo_top_categoria_responsive').html('<h1 class="titulo-categoria">'+_titulo+'</h1>');
+
+		    		var oferta = "<p class='textoTitulo'>OFERTAS ESPECIALES</p>";
+					jQuery('#content769 h1').html(oferta);
+					
+	            },exit:function(){
+	            	
+	            	var _titulo = jQuery('#content769 h1').html();
+		    		jQuery('#target_titulo_top_categoria_responsive').html('<h1 class="titulo-categoria">'+_titulo+'</h1>');
+	            }
+	            
+
+	   });
+		
+	   
+
+});

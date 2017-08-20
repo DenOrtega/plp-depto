@@ -1,0 +1,1798 @@
+//-----------------------------------------------------------------
+// Licensed Materials - Property of IBM
+//
+// WebSphere Commerce
+//
+// (C) Copyright IBM Corp. 2008, 2010 All Rights Reserved.
+//
+// US Government Users Restricted Rights - Use, duplication or
+// disclosure restricted by GSA ADP Schedule Contract with
+// IBM Corp.
+//-----------------------------------------------------------------
+
+/** 
+ * @fileOverview This file is to be included in all full pages that use the CatalogEntryThumbnailDisplay.jspf.
+ * It prepares all the code required for the Product Quick Info pop-up reveal.
+ */
+
+	//Make the Product Quick Info pop-up window movable.
+	dojo.require("dojo.dnd.move");
+	dojo.require("dijit.Dialog");
+	dojo.require("dojo._base.event");
+	
+	/** The variable stores the Product Quick Info pop-up window. */
+	var m1;
+	
+	/** 
+	 * This variable is the id of element to display the pop-up around on <Enter> key click.
+	 * Its default value is set to empty.
+	 */
+	var nodeId = "";
+	/** 
+	 * Used by the Brazil store, this variable is the id of the product entry to use. The ProductID
+	 * in the Madisons store has been increment by one, so its really productID + 1. Hence, Brazil
+	 * store will use the original productID, called origProductID. Its default value is set to empty.
+	 */
+	var origProductID = "";
+	
+	/** The variable stores the identifier of the order item to be replaced */
+	var replaceOrderItemId;
+	
+	/** The response from the server */
+	var responseJSON;
+	
+	/** 
+	 * Initializes the Product Quick Info pop-up window to a movable dialog.
+	 */	
+	var initPopup = function(){
+		m1 = new dojo.dnd.Moveable("second_level_category_popup", {handle: "popupHeader"});
+	};
+	
+	var changeAttrId = "";
+	var changeContractId = "";
+	
+	var showQTYBox = false;
+	
+	dojo.addOnLoad(initPopup);
+
+
+	function setUpdateOrderItemIdsForItem(changeAttr, itemPosition) {
+		changeAttrId = changeAttr;
+		if (itemPosition != "") {
+			changeContractId = 'B2BContractSelectExt_id_' + itemPosition;
+		}
+	}
+	 
+	 /** 
+		 * Overrides the hidePopupButton function above by also checking to see if the user clicks shift+tab.
+		 * 
+		 * @param {string} id The id of the div area to hide. 
+		 * @param {event} event The keystroke event entered by the user. 
+		 */	
+	 function shiftTabHidePopupButton(id, e){
+		 if ((e.shiftKey) && (dojo.keys.TAB)){
+				 
+				 hidePopupButton(id);
+			 } 
+			 
+		}
+		 
+//Start : Manhattan States Code Changes	 	 
+		function getXInventoryStatus(catEntryId) {
+			//catEntryId = catEntryId.replace("popupButton__", ""); 
+			 
+			var parameters = {};
+			parameters.catEntryId = catEntryId;
+			
+			dojo.publish("ajaxRequestInitiated");
+			dojo.xhrPost({
+					url: getAbsoluteURL() +"cenXInventoryStatusControllerAjaxCmd",
+					handleAs: "json-comment-filtered",
+					content: parameters,
+					service: this,
+					load: getXInventoryDetails,
+					error: function(errObj,ioArgs) {
+						console.debug("CatalogEntryThumbnailDisplay.showPopup: Unexpected error occurred during an xhrPost request.");
+						dojo.publish("ajaxRequestCompleted");
+					}
+			});
+		 
+		}
+		function getXInventoryDetails(serviceResponse, ioArgs) {
+			if (serviceResponse.inventoryStatus != null) {
+				if(serviceResponse.inventoryStatus=="Out of Stock"){
+					document.getElementById('addToCartAjaxButton1').style.display="none";
+					document.getElementById('outofstockstockdisplayid').style.display="";
+					 document.getElementById('productPopUpQty').style.display = "none";
+					 document.getElementById('productPopUpQty_lbl').style.display = "none";
+					 document.getElementById('limitedstockdisplayid').style.display="none";
+					 document.getElementById('inventoryMsg_qv').innerHTML = "" ;
+				}else if(serviceResponse.inventoryStatus=="Limited Stock"){
+					document.getElementById('addToCartAjaxButton1').style.display="";
+					document.getElementById('outofstockstockdisplayid').style.display="none";
+					 document.getElementById('productPopUpQty').style.display = "";
+					 document.getElementById('productPopUpQty_lbl').style.display = "";
+					 document.getElementById('limitedstockdisplayid').style.display="";
+					 document.getElementById('inventoryMsg_qv').innerHTML = "" ;
+				}  else if(serviceResponse.inventoryStatus=="In Stock"){
+					document.getElementById('addToCartAjaxButton1').style.display="";
+					document.getElementById('outofstockstockdisplayid').style.display="none";
+					 document.getElementById('productPopUpQty').style.display = "";
+					 document.getElementById('productPopUpQty_lbl').style.display = "";
+					 document.getElementById('limitedstockdisplayid').style.display="none";
+					 document.getElementById('inventoryMsg_qv').innerHTML = "" ;
+				} 
+			}  
+		}
+		
+		// MHTN: Add to cart button display logic - DEFECT 645
+		function populateAddToCart (serviceResponse) {
+			if (serviceResponse != null && serviceResponse != 'undefinded' && serviceResponse != ""
+				&& serviceResponse.catalogEntry != null && serviceResponse.catalogEntry != "") {
+				if(serviceResponse.catalogEntry.displayAddToCartButton == 'false'  || serviceResponse.catalogEntry.availabe_msg == 'Producto sin stock'){
+					document.getElementById('addToCartAjaxButton1').style.display="none";
+					document.getElementById('outofstockstockdisplayid').style.display="";
+					document.getElementById('productPopUpQty').style.display = "none";
+					document.getElementById('productPopUpQty_lbl').style.display = "none";
+					document.getElementById('limitedstockdisplayid').style.display="none";
+					document.getElementById('inventoryMsg_qv').innerHTML = "" ;
+				} else {
+					document.getElementById('addToCartAjaxButton1').style.display="";
+					document.getElementById('outofstockstockdisplayid').style.display="none";
+					document.getElementById('productPopUpQty').style.display = "";
+					document.getElementById('productPopUpQty_lbl').style.display = "";
+					
+					// Availble message options - Producto sin stock | Limited Stock | ""
+					// No need to display limited stock message for combo
+					if(serviceResponse.catalogEntry.availabe_msg != "" && serviceResponse.catalogEntry.catalogEntryTypeCode != 'PackageBean'){
+						document.getElementById('limitedstockdisplayid').style.display="";
+					}	
+					
+					document.getElementById('inventoryMsg_qv').innerHTML = "" ;
+				} 
+			}  
+		}
+	/** 
+	 * Displays the Product Quick Info pop-up containing product information.
+	 * Retrieves product information in JSON format via an Ajax call.
+	 * 
+	 * @param {string} productId The id of the product to display.
+	 * @param {string} event The event triggered from user actions.
+	 * @param {string} targetId The id of the dojo element to display the pop-up next to.
+	 * @param {string} nodeId The id of element to display the pop-up around on <Enter> key click.
+	 * @param {object} productActionList The object containing Product Quick Info pop-up action list settings.
+	 * @param {string} popUpQty The quantity to be displayed for this product.
+	 */		
+	function showPopup(productId,event,targetId,nodeId,productActionList,popUpQty,containerId) {
+		//Start : Manhattan States Code Changes	 
+		//getXInventoryStatus(productId);
+		if(event == null || (event != null && event.type!="keypress") || (event != null && event.type=="keypress" && event.keyCode==13)){
+			resetPopUp();
+			
+			var container = (containerId) ? containerId : "second_level_category_popup";
+
+			if ( typeof(isBrazilStore) != 'undefined' && isBrazilStore ){
+				this.nodeId = nodeId; //save the parent node
+	        }
+			//Default action list is used if it is not passed into this method
+			if(productActionList == null){
+				productActionList = new popupActionProperties();
+			}
+			
+			//document.getElementById('productQuantity_qv').style.display = 'none';
+			document.getElementById('addToCartAjaxButton1').style.display = '';
+			document.getElementById('limitedstockdisplayid').style.display="none";
+			
+			showQTYBox = productActionList.showAddToCart;
+			//From the productActionList object properties
+			//hide/show the action links from the Quick Info 		
+			if(productActionList.showAddToCart){
+				if(document.getElementById('addToCartAjaxButton')){
+					document.getElementById('addToCartAjaxButton').style.display='block';
+				} else if(document.getElementById('addToCartButton')){
+					document.getElementById('addToCartButton').style.display='block';
+				}
+				if(document.getElementById('skuNotBuyableButton')){
+					document.getElementById('skuNotBuyableButton').style.display='none';
+				}				
+			} else {
+				if(document.getElementById('addToCartAjaxButton')){
+					document.getElementById('addToCartAjaxButton').style.display='none';
+					document.getElementById('productQuantity_qv').style.display = 'none';
+				} else if(document.getElementById('addToCartButton')){
+					document.getElementById('addToCartButton').style.display='none';
+				}
+				if(document.getElementById('skuNotBuyableButton')){
+					document.getElementById('skuNotBuyableButton').style.display='block';
+				}
+			}
+	
+			if(productActionList.showWishList){
+				if(document.getElementById('addToWishListLinkAjax')){
+					document.getElementById('addToWishListLinkAjax').style.display='block';
+				} else if(document.getElementById('addToWishListLink')){
+					document.getElementById('addToWishListLink').style.display='block';					
+				}
+			} else {
+				if(document.getElementById('addToWishListLinkAjax')){
+					dojo.style("addToWishListLinkAjaxDivContainer","display","none");
+				} else if(document.getElementById('addToWishListLink')){
+					dojo.style("addToWishListLinkContainer","display","none");
+				}
+			}
+					
+			if(productActionList.showProductCompare && document.getElementById('compare')){
+				if(document.getElementById('addToCompareLink')){
+					document.getElementById('addToCompareLink').style.display='block';
+					dojo.style("addToCompareLinkContainer","display","block");
+				}
+			} else {
+				if(document.getElementById('addToCompareLink')){
+					dojo.style("addToCompareLinkContainer","display","none");
+				}
+			}		
+			
+			if(productActionList.showReplaceCartItem){
+				if(document.getElementById('replaceCartItemAjax')){
+					dojo.style("replaceCartItemAjaxContainer","display","block");
+					document.getElementById('replaceCartItemAjax').style.display = 'block';
+				} else if(document.getElementById('replaceCartItemNonAjax')){
+					dojo.style("replaceCartItemNonAjaxContainer","display","block");
+					document.getElementById('replaceCartItemNonAjax').style.display = 'block';
+				}		
+
+				//When showing the quick info pop-up for replace item flow
+				//Don't show the requisition list links
+				if(document.getElementById('addToNewRequisitionList')){
+					dojo.style("addToNewRequisitionListContainer","display","none");
+
+				}
+				if(document.getElementById('addToExistingRequisitionList')){
+					dojo.style("addToExistingRequisitionListContainer","display","none");
+
+				}				
+			} else {
+				if(document.getElementById('replaceCartItemAjax')){
+					dojo.style("replaceCartItemAjaxContainer","display","none");
+				} else if(document.getElementById('replaceCartItemNonAjax')){
+					dojo.style("replaceCartItemNonAjaxContainer","display","none");
+				}		
+			}		
+			
+			//Do not display the Quantity field if the product is not buyable
+			if(!productActionList.showAddToCart && !productActionList.showWishList){
+				if(document.getElementById('productPopUpQty')){
+					document.getElementById('productPopUpQty').disabled = true;
+				}
+			} else {
+				if(document.getElementById('productPopUpQty')){
+					document.getElementById('productPopUpQty').disabled = false;
+					
+				}
+			}
+			//Set the quantity to Quantity field
+			if(popUpQty == null)
+			{
+				if(document.getElementById('productPopUpQty')){
+					document.getElementById('productPopUpQty').value = 1;
+				}
+			}else {
+				if(document.getElementById('productPopUpQty')){
+					document.getElementById('productPopUpQty').value = popUpQty;
+				}
+			}
+		
+			dijit.byId(container).closeButtonNode.style.display='none';
+			closeAllDialogs(); // close all dijit.dialogs first
+			dijit.byId(container).show();
+			this.setDialogEscapeKey(container);
+			
+			// hides the DialogUnderlayWrapper component, the component that grays out the screen behind,
+			// as we do not want the background to be greyed out
+			dojo.query('.dijitDialogUnderlayWrapper', document).forEach(function(tag) {		
+				tag.style.display='none';
+			});		
+			
+			var parameters = {};
+			parameters.storeId = CommonContextsJS.storeId;
+			parameters.langId=CommonContextsJS.langId;
+			parameters.catalogId=CommonContextsJS.catalogId;
+			parameters.productId=productId;	
+			parameters.containerId=container;
+			
+			displayOverView();
+			
+			dojo.publish("ajaxRequestInitiated");
+			dojo.xhrPost({
+					url: getAbsoluteURL() + "GetCatalogEntryDetailsByID",				
+					handleAs: "json-comment-filtered",
+					content: parameters,
+					service: this,
+					load: populatePopUp,
+					error: function(errObj,ioArgs) {
+						console.debug("CatalogEntryThumbnailDisplay.showPopup: Unexpected error occurred during an xhrPost request.");
+						dojo.publish("ajaxRequestCompleted");
+						hideOverView();
+					}
+				});
+		}
+	}
+
+	/** 
+	 * Displays the Product Add to Cart pop-up containing product information.
+	**/
+	function showAddToCartModal(){	
+
+		/*TCS Toma total de carro en escritorio y lo agrega en carro responsivo*/	
+		try{
+			var TotalCarro=document.getElementById("CarroProdTotal").value;
+			document.getElementById("CarroProdTotalMobile2").innerHTML = TotalCarro;
+			
+			//se quita estado checked a los incluidos
+			var incluidos = dojo.query("span.incluido");
+
+			for(var i = 0; i < incluidos.length; i++){
+			  incluidos[i].innerHTML = "Incluir en el carro";
+			}
+
+			var containers = dojo.query(".incluido");
+
+			for(var i = 0; i < containers.length; i++){
+			  dojo.removeClass(containers[i], 'incluido');
+			}
+			
+		}catch(e){}
+		
+		dijit.byId('add_to_cart_popup').closeButtonNode.style.display='none';
+		closeAllDialogs(); // close all dijit.dialogs first
+		if(dojo.byId('add_to_cart_popup')){
+			dijit.byId('add_to_cart_popup').show();
+			this.setDialogEscapeKey('add_to_cart_popup');
+			displayOverView();
+		}else{
+			console.debug("ID: add_to_cart_popup, is missing.");
+		}
+		//1079- swatches start
+		if(null!=document.getElementById("swatches_pdp")){
+			var element = document.getElementById("swatches_pdp").children;
+		for(var i=1;i<element.length; i++){
+			if(i==1 && element[i].id=='color_btn'){
+				element[i].className = "picked";
+				swatchValue = element[i].children[0].children[0].title;
+				categoryDisplayJS.setSelectedColor(swatchValue);
+				categoryDisplayJS.setSelectedAttribute("Color",swatchValue);
+				categoryDisplayJS.setSizeSwatchForColor(element[1].children[0].children[0].id.substring(12,34),"fromPDP");
+			}else{
+				if(element[i].id=='color_btn'){
+					element[i].className = "";
+				}
+			}
+			
+			
+			}
+		}
+		if(null!=document.getElementById("colorDiv")){
+			if(null!=document.getElementById("swatches_pdp")){
+				var element = document.getElementById("swatches_pdp").children;
+			for(var i=0;i<element.length; i++){
+				if(element[i].id=='color_btn'){
+						element[i].className = "";
+					}
+				
+				}
+			}
+			}
+		
+		
+		if(null!=document.getElementById("size_swatches_pdp")){
+			var element = document.getElementById("size_swatches_pdp").children;
+		for(var i=1;i<element.length; i++){
+			if(i==1 && element[i].id=='color_btn' && document.getElementById("colorDiv")!=null && document.getElementById("colorDiv") != undefined){
+				element[i].className = "picked";
+				swatchValue = element[i].children[0].children[0].title;
+				categoryDisplayJS.setSelectedSize(swatchValue);
+				categoryDisplayJS.setSelectedAttribute("Talla",swatchValue);
+				categoryDisplayJS.setColorSwatchForSize(element[1].children[0].children[0].children[0].id.substring(7,29),"fromPDP");
+			}
+			else if(element[i].id=='color_btn'){
+					element[i].className = "";
+				}
+			}
+		}
+		if(null!=document.getElementById("sizeDiv")){
+			if(null!=document.getElementById("size_swatches_pdp")){
+				var element = document.getElementById("size_swatches_pdp").children;
+			for(var i=0;i<element.length; i++){
+				if(element[i].id=='color_btn'){
+						element[i].className = "";
+					}
+				
+				}
+			}
+			}
+		
+		
+		//1079- swatches end
+	}
+	
+	function setDialogEscapeKey(container){
+		dojo.connect(dojo.byId(container), 'onkeypress', function(evt) {
+			key = evt.keyCode;
+			if (key == dojo.keys.ESCAPE) {
+				hideOverView();
+				hidePopup(container);
+			}
+		});	
+	}
+
+	/** 
+	 * Populates all the contents of the Product Quick Info pop-up with the JSON returned from the server.
+	 * 
+	 * @param {object} serviceRepsonse The JSON response from the service.
+	 * @param {object} ioArgs The arguments from the service call.
+	 */		
+	function populatePopUp(serviceResponse, ioArgs) {
+		
+		responseJSON = serviceResponse;
+		var defaultSwatchColor ="";//for swatches req#725
+		// MHTN: Quick view addtocart logic change
+		populateAddToCart(serviceResponse);
+		
+		document.getElementById('inventoryMsg_qv').innerHTML = "" ;
+		categoryDisplayJS.setEntitledItemJsonObject(serviceResponse.productAttributes);
+
+		var catEntryID = serviceResponse.catalogEntry.catalogEntryIdentifier.uniqueID, modalId = (ioArgs.args.content.containerId) && ioArgs.args.content.containerId;
+		
+		if(document.getElementById('star_rating_qv')){
+			if((serviceResponse.catalogEntry.bazaarVoice_Stars != null) && (serviceResponse.catalogEntry.bazaarVoice_Stars != '')){
+				document.getElementById('star_rating_qv').className = 'BazaarVoice_'+serviceResponse.catalogEntry.bazaarVoice_Stars;
+				document.getElementById('star_rating_qv').style.display = 'inline-block';
+			}else{
+				document.getElementById('star_rating_qv').style.display = 'none';
+			}
+		}
+		
+		if((document.getElementById('productNumReviews')) && (document.getElementById('productNumReviews'))){
+			if(serviceResponse.catalogEntry.bazaarVoice_Reviews > 0){
+				document.getElementById('productReviewsContainer').style.display = 'inline-block';
+				document.getElementById('productNumReviews').innerHTML = serviceResponse.catalogEntry.bazaarVoice_Reviews;	
+				dojo.byId('write_review').innerHTML = dojo.byId('bazaarvoiceReviews').innerHTML;
+				
+			}else{
+				document.getElementById('productReviewsContainer').style.display = 'none';
+				dojo.byId('write_review').innerHTML = dojo.byId('bethefirst').innerHTML;		
+
+			}
+		}
+
+		var isProductBean = false;
+		var singleSKUProduct = false;
+		var singleSKUProduct_catEntryId = "";
+		if(serviceResponse.catalogEntry.catalogEntryTypeCode=='ProductBean') {
+			isProductBean = true;
+			if(dojo.byId("catalogEntryTypeCode")!=null && dojo.byId("catalogEntryTypeCode")!=undefined){
+				dojo.byId("catalogEntryTypeCode").value="ProductBean";
+			}
+			if(serviceResponse.singleSKUProduct_catEntryId && serviceResponse.singleSKUProduct_catEntryId!='') {
+				singleSKUProduct = true;
+				singleSKUProduct_catEntryId = serviceResponse.singleSKUProduct_catEntryId;
+			}
+		}
+		
+		var isBundleBean = false;
+		if(serviceResponse.catalogEntry.catalogEntryTypeCode=='BundleBean') {
+			isBundleBean = true;
+		}
+		
+		var isItemBean = false;
+		if(serviceResponse.catalogEntry.catalogEntryTypeCode=='ItemBean') {
+			isItemBean = true;
+			
+			if(document.getElementById('inventoryMsg_qv')){
+				if(serviceResponse.catalogEntry.inventoryMsg != null 
+				   && serviceResponse.catalogEntry.inventoryMsg != 'undefined'){
+					//document.getElementById('inventoryMsg_qv').innerHTML =  serviceResponse.catalogEntry.inventoryMsg;
+				}else{
+					document.getElementById('inventoryMsg_qv').innerHTML = "";
+				}
+			}
+			
+			if(dojo.byId("catalogEntryTypeCode")!=null && dojo.byId("catalogEntryTypeCode")!=undefined){
+				dojo.byId("catalogEntryTypeCode").value="ItemBean";
+			}
+		}
+		
+		var isPackageBean = false;
+		if(serviceResponse.catalogEntry.catalogEntryTypeCode=='PackageBean') {
+			isPackageBean = true;
+		}
+		
+		var isDynamicKitBean = false;
+		if(serviceResponse.catalogEntry.catalogEntryTypeCode=='DynamicKitBean') {
+			isDynamicKitBean = true;
+		}
+		
+		var showDynamicKit = false;
+		if(serviceResponse.catalogEntry.showDynamicKit) {
+			showDynamicKit = true;
+		}
+			
+		var showAddToCart = false;
+		var showConfigure = false;
+		var hasComponents = false;
+		var isBuyable = (serviceResponse.catalogEntry.buyable=='1');
+		if(isDynamicKitBean && showDynamicKit){
+			if(serviceResponse.catalogEntry.components.length>0){
+				hasComponents = true;
+			}
+			showAddToCart = isBuyable && (serviceResponse.catalogEntry.components.length>0) && serviceResponse.catalogEntry.hasPriceForDK;
+			showConfigure = isBuyable && serviceResponse.catalogEntry.isDKConfigurable;
+		}
+		
+		document.getElementById('productIdQuickInfo').innerHTML = catEntryID;
+		document.getElementById('productName').innerHTML = serviceResponse.catalogEntry.description[0].name;
+		
+		if((serviceResponse.catalogEntry.displayPromoText!=null) && (serviceResponse.catalogEntry.displayPromoText==true)){
+			document.getElementById('quick_promotional_description').innerHTML = serviceResponse.catalogEntry.promoText;	
+		}
+		
+		var baseImageUrl = "";
+		if(dojo.byId('baseUrlImageDir') != null  && dojo.byId('baseUrlImageDir') != undefined){
+			var baseImageUrl = dojo.byId('baseUrlImageDir').innerHTML;
+		}
+		
+		if ( serviceResponse.catalogEntry.description[0].fullImage != serviceResponse.catalogEntry.objectPath){
+			if(document.getElementById('productFullImage_quickInfo') != null  && document.getElementById('productFullImage_quickInfo') !=  undefined) {
+				document.getElementById('productFullImage_quickInfo').src = serviceResponse.catalogEntry.description[0].fullImage;
+			}
+		}
+		else{
+			if(document.getElementById('productFullImage_quickInfo') != null  && document.getElementById('productFullImage_quickInfo') != undefined) {
+				document.getElementById('productFullImage_quickInfo').src = baseImageUrl + "images/NoImageIcon.jpg";
+			}
+		}
+
+		dojo.style(dojo.query('.quick_info_img_placeholder')[0], 'display', 'none');
+		dojo.style(dojo.byId('productFullImage_quickInfo'),'display','block');
+		/*START REQ 291: 3rd Price*/
+		var elem = dojo.byId("productQuantity");
+		if(elem)elem.style.marginTop="0px";
+		/*END REQ 291: 3rd Price*/
+		
+        /*Brazil - display non-payment promotion price */
+        if ( typeof(isBrazilStore) != 'undefined' && isBrazilStore ){
+			if ( isProductBean ){//if its a 'product', get the first item  
+				origProductID = serviceResponse.productAttributes[0].catentry_id;
+			}
+			else {
+				//get 'productId' from parent node because the 'productId' parameter that was
+				// passed in, has been increment by 1
+				// for example, productId = catentry_id+1.  
+				origProductID = nodeId.match(/\d+/)[0];
+			}
+			// check to see if there's an existing promotion within given node 
+        	var brazilFeaturedNonPaymentPromotion =  dojo.byId('WC_RightSidebarESpotDisplay_'+origProductID+'_div_1_BrazilFeaturedNonPaymentPromotion'); 		
+			if ( brazilFeaturedNonPaymentPromotion != null && (dojo.query('.discount_price', brazilFeaturedNonPaymentPromotion).length != 0)){
+	            dojo.style(dojo.byId('productPrice'),"display","none");
+	            var id = dojo.byId('WC_PromotionDiscountDisplay_'+origProductID+'_0');            
+	            dojo.addClass(dojo.byId('WC_PromotionDiscountDisplay_'+origProductID+'_0'),'promo_desc');            
+	        	dojo.byId('BrazilFeaturedNonPaymentPromotion').innerHTML = brazilFeaturedNonPaymentPromotion.innerHTML;
+	        }else{
+				if (serviceResponse.catalogEntry.offerPrice) {
+					document.getElementById('productPrice').innerHTML = serviceResponse.catalogEntry.offerPrice;
+		            dojo.style(dojo.byId('productPrice'),"display","inline");
+				}
+			}
+		}//end of Brazil store Promotion display
+        else{ //Madisons store..display offerPrice
+        	if(isDynamicKitBean && !hasComponents){
+        		document.getElementById('productPrice').innerHTML = serviceResponse.catalogEntry.pricePending;        		        		
+        	}else{
+    			var innerHTML = "";
+    			if(serviceResponse.catalogEntry.isTarjetaMas){
+    				var tmp = "";
+    				/*START REQ 291: 3rd Price*/
+    				if((serviceResponse.catalogEntry.listPriced) && parseFloat(serviceResponse.catalogEntry.listPriceAmount) > parseFloat(serviceResponse.catalogEntry.offerPriceAmount)){
+    					tmp = "margin-bottom: 2px;";
+    				}
+    				/*END REQ 291: 3rd Price style='"+tmp+"'*/
+    				innerHTML = "<span class='price-first'>" + serviceResponse.catalogEntry.tarjetaPrice + "</span>"+
+    							"<span class='tarjeta_mas_img'></span>"+
+    							"<div class='price-second precio_internet'>" + MessageHelper.messages['INTERNET_PRICE'] + serviceResponse.catalogEntry.offerPrice + "</div>";
+    				/*START REQ 291: 3rd Price*/
+    				if((serviceResponse.catalogEntry.listPriced) && parseFloat(serviceResponse.catalogEntry.listPriceAmount) > parseFloat(serviceResponse.catalogEntry.offerPriceAmount)){
+        				innerHTML += "<div class='price-second precio_normal'>" + MessageHelper.messages['NORMAL_PRICE'] + serviceResponse.catalogEntry.listPrice + "</div>";
+        				var elem = dojo.byId("productQuantity");
+        				//if(elem)elem.style.marginTop="15px";
+        				if(elem)elem.style.marginTop="5px";
+        			}
+    				/*END REQ 291: 3rd Price*/
+    			}
+    			else if((serviceResponse.catalogEntry.listPriced) && parseFloat(serviceResponse.catalogEntry.listPriceAmount) > parseFloat(serviceResponse.catalogEntry.offerPriceAmount)){
+    				innerHTML = "<span class='price-first'>" + serviceResponse.catalogEntry.offerPrice + "</span>"+
+    							"<div class='price-second precio_normal'>" + MessageHelper.messages['NORMAL_PRICE'] + serviceResponse.catalogEntry.listPrice + "</div>";
+    			}
+    			else{
+    				innerHTML = "<span class='price-first'>" + serviceResponse.catalogEntry.offerPrice + "</span>";
+    			}
+    			document.getElementById('productPrice').innerHTML = innerHTML;
+			}
+		}
+        
+        /*Brazil - display featured installment option price */
+        if ( typeof(isBrazilStore) != 'undefined' && isBrazilStore )
+        {
+            var catalogEntryFeaturedInstallmentPrice = dojo.byId('WC_CatalogEntryFeaturedInstallmentOption_'+origProductID+'_div');
+            if ( catalogEntryFeaturedInstallmentPrice != null ){
+                var featuredInstallmentPrice = catalogEntryFeaturedInstallmentPrice.innerHTML.replace(/^\s+|\s+$/g,"");//Remove leading and trailing blanks
+                
+                //display the installment option; i.e, 3x of $50.23
+                if ( featuredInstallmentPrice.length != 0){
+    				dojo.byId('BrazilCatalogEntryFeaturedInstallmentOption').innerHTML = catalogEntryFeaturedInstallmentPrice.innerHTML;
+        	        dojo.style(dojo.byId('promoDetails'),"display","inline");
+
+                }else{//no installment price, hide the span
+                	dojo.style(dojo.byId('BrazilCatalogEntryFeaturedInstallmentOption'),"display","none");
+            	}
+    		}
+        }//end of Brazil Store installments
+
+		var descAttributesHTML = "";
+		for (var i in serviceResponse.catalogEntryAttributes.attributes) {
+			if (serviceResponse.catalogEntryAttributes.attributes[i].usage == "Descriptive" ) 
+			{				
+				descAttributesHTML = descAttributesHTML + serviceResponse.catalogEntryAttributes.attributes[i].name + ' : ';
+				if (serviceResponse.catalogEntryAttributes.attributes[i].value != null )
+				{
+					descAttributesHTML = descAttributesHTML + serviceResponse.catalogEntryAttributes.attributes[i].value.value + '<br />';
+				}
+				else
+				{
+					descAttributesHTML = descAttributesHTML + '<br />';
+				}			
+			}
+		}
+		
+		document.getElementById('productSKUValue').innerHTML = serviceResponse.catalogEntry.catalogEntryIdentifier.externalIdentifier.partNumber;
+		document.getElementById('productMoreInfoLink').href = serviceResponse.catalogEntryURL;
+		if(document.getElementById('write_review')){
+			document.getElementById('write_review').href = serviceResponse.bazaarVoicePDPCommentURL;
+		}
+		
+		/*Brazil - show the free shipping image */
+		if ( typeof(isBrazilStore) != 'undefined' && isBrazilStore ){
+        	var free_shipping_div = dojo.byId('free_shipping_promotion_div');
+        	var brazilFeaturedShippingPromotionDiv  = dojo.byId('WC_RightSidebarESpotDisplay_'+origProductID+'_div_1_BrazilFeaturedShippingPromotion');
+
+        	//get innerHtml to show Free Shipping
+            if ( free_shipping_div != null && brazilFeaturedShippingPromotionDiv != null ){
+            	free_shipping_div.innerHTML = brazilFeaturedShippingPromotionDiv.parentNode.innerHTML + '<br />';
+            }
+	 	}
+
+		if(document.getElementById("selectedAttr_"+replaceOrderItemId) !=null) {
+			var selectedAttributesString = document.getElementById("selectedAttr_"+replaceOrderItemId).value.replace(/'/g,"&#039;");
+			var selectedAttributeArray = selectedAttributesString.split("|");
+		}
+		categoryDisplayJS.moreInfoUrl='ProductDisplay?storeId='+storeId+'&catalogId='+catalogId+'&langId='+langId+'&productId='+catEntryID;
+
+		//save well known subscription attributes
+		var fulfillmentFrequencyAttrName = "";
+		var fulfillmentFrequency = "";
+		var paymentFrequencyAttrName = "";
+		var paymentFrequency = "";
+		var timePeriodAttrName = "";
+		var validTimePeriodValues = new Array();
+		var timePeriodValuesCounter = 0;
+		var sizecount=0;
+		var colorcount=0;
+		var count=0;
+		for (var i in serviceResponse.catalogEntryAttributes.attributes) {
+			count++;
+			if (serviceResponse.catalogEntryAttributes.attributes[i].usage == "Defining") {
+				if (serviceResponse.catalogEntryAttributes.attributes[i].attributeIdentifier.externalIdentifier != null && serviceResponse.catalogEntryAttributes.attributes[i].attributeIdentifier.externalIdentifier.identifier == subsFulfillmentFrequencyAttrName) {
+					fulfillmentFrequencyAttrName = serviceResponse.catalogEntryAttributes.attributes[i].name.replace(/'/g,"&#039;");
+				} else if (serviceResponse.catalogEntryAttributes.attributes[i].attributeIdentifier.externalIdentifier != null && serviceResponse.catalogEntryAttributes.attributes[i].attributeIdentifier.externalIdentifier.identifier == subsPaymentFrequencyAttrName) {
+					paymentFrequencyAttrName = serviceResponse.catalogEntryAttributes.attributes[i].name.replace(/'/g,"&#039;");
+				} else if (serviceResponse.catalogEntryAttributes.attributes[i].attributeIdentifier.externalIdentifier != null && serviceResponse.catalogEntryAttributes.attributes[i].attributeIdentifier.externalIdentifier.identifier == subsTimePeriodAttrName) {
+					timePeriodAttrName = serviceResponse.catalogEntryAttributes.attributes[i].name.replace(/'/g,"&#039;");
+				}else if(serviceResponse.catalogEntryAttributes.attributes[i].attributeIdentifier.externalIdentifier != null && serviceResponse.catalogEntryAttributes.attributes[i].attributeIdentifier.externalIdentifier.identifier == 'Color' && serviceResponse.catalogEntryAttributes.attributes[i].allowedValue.length>0){ 
+                    colorcount=count; 
+                } else if(serviceResponse.catalogEntryAttributes.attributes[i].attributeIdentifier.externalIdentifier != null && serviceResponse.catalogEntryAttributes.attributes[i].attributeIdentifier.externalIdentifier.identifier == 'Talla' && serviceResponse.catalogEntryAttributes.attributes[i].allowedValue.length>0){ 
+                        sizecount=count; 
+                } 
+			}
+		}
+		if (fulfillmentFrequencyAttrName != "" && paymentFrequencyAttrName != "") {
+			for (var i in serviceResponse.productAttributes) {
+				var catalogEntry = serviceResponse.productAttributes[i];
+				var definingAttributes = catalogEntry.Attributes;
+				for(attributeName in definingAttributes){
+					var tempStr = attributeName.split("_");
+					if (tempStr[0] == fulfillmentFrequencyAttrName) {
+						fulfillmentFrequency = tempStr[1];
+					} else if (tempStr[0] == paymentFrequencyAttrName) {
+						paymentFrequency = tempStr[1];
+					} else if (tempStr[0] == timePeriodAttrName) {
+						validTimePeriodValues[timePeriodValuesCounter] = tempStr[1];
+						timePeriodValuesCounter++;
+					}
+				}
+			}
+		}
+		
+		var attributesHTML = "";
+		var allowedValues = {};
+		var valueArray =[];// to store color atributes of a particular sku Req#725
+		var valueSizeArray =[];
+		var attributesNum = 0;//number of color attributes in a particular sku Req#725
+		var tallaAttributesNum = 0;
+		
+		
+		var primaryattr="";
+		var bothcolorandsize="false";
+		for (var index in serviceResponse.productAttributes) {
+			
+			for (var attr in serviceResponse.productAttributes[index].Attributes) {
+				
+				var parts = attr.split("_");
+				var name = parts[0];
+				var value = parts[1];
+				//if attribute name is color save the value to value array and increase the attribute count Req#725 start
+				if(name == 'Color'){
+					if(valueArray.indexOf(parts[1])<=-1){
+						valueArray[attributesNum]=parts[1];
+					attributesNum+=1;
+					}
+				}
+				if(name == 'Talla'){
+					if(valueSizeArray.indexOf(parts[1])<=-1){
+						valueSizeArray[tallaAttributesNum]=parts[1];
+						tallaAttributesNum+=1;
+					}
+				}
+				////for swatches req#725 end
+				var allowed = allowedValues[name];
+				if (allowed == null) {
+					allowed = {};
+					allowedValues[name]=allowed;
+				}
+				allowed[value]=1;
+			}
+		}
+		var fromComparePageSingleSKU=false;
+		if(serviceResponse.catalogEntry.catalogEntryTypeCode=='ProductBean'){
+				if (serviceResponse.productAttributes[0].attributes) {
+					fromComparePageSingleSKU=true;
+				}
+		}
+		
+		if(sizecount>0 && colorcount>0 ){
+			bothcolorandsize="true";
+			if(sizecount>colorcount ){
+				primaryattr="Color";
+			}else{
+				primaryattr="Talla"
+			}
+		}
+		var swatchdisplayed="false";
+		if (isProductBean && !fromComparePageSingleSKU) {
+			for (var i in serviceResponse.catalogEntryAttributes.attributes) {
+				if (serviceResponse.catalogEntryAttributes.attributes[i].usage == "Defining") {
+					if (serviceResponse.catalogEntryAttributes.attributes[i].attributeIdentifier.externalIdentifier != null && serviceResponse.catalogEntryAttributes.attributes[i].attributeIdentifier.externalIdentifier.identifier == subsFulfillmentFrequencyAttrName) {
+						categoryDisplayJS.setSelectedAttribute(fulfillmentFrequencyAttrName, fulfillmentFrequency);
+						categoryDisplayJS.changePrice('entitledItem_'+catEntryID,true,false);
+						updateMoreInfoUrl();
+					} else if (serviceResponse.catalogEntryAttributes.attributes[i].attributeIdentifier.externalIdentifier != null && serviceResponse.catalogEntryAttributes.attributes[i].attributeIdentifier.externalIdentifier.identifier == subsPaymentFrequencyAttrName) {
+						categoryDisplayJS.setSelectedAttribute(paymentFrequencyAttrName, paymentFrequency);
+						categoryDisplayJS.changePrice('entitledItem_'+catEntryID,true,false);
+						updateMoreInfoUrl();
+					} else {//Req#725 swatches start
+						//changes for swatches to display color Req#725
+						 var swatchCount=0;
+						for (var val in serviceResponse.catalogEntryAttributes.attributes[i].allowedValue) {
+							for (var valArr in valueArray){
+								if(serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[val].value == valueArray[valArr]){
+									if (serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[val].extendedValue) {
+										for (var ext in serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[val].extendedValue) {
+											if (serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[val].extendedValue[ext].key == 'Image1' ) {
+												swatchCount++;
+											}
+										}
+									}
+								}
+							}
+						}
+						var swatchsizeCount=0;
+						for (var val in serviceResponse.catalogEntryAttributes.attributes[i].allowedValue) {
+							for (var valArr in valueSizeArray){
+								if(serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[val].value == valueSizeArray[valArr]){
+									if (serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[val].extendedValue) {
+										for (var ext in serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[val].extendedValue) {
+											if (serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[val].extendedValue[ext].key == 'Image1' ) {
+												swatchsizeCount++;
+											}
+										}
+									}
+								}
+							}
+						}
+						//
+						 if(serviceResponse.catalogEntryAttributes.attributes[i].attributeIdentifier.externalIdentifier.identifier == 'Color' && attributesNum <=5 && valueArray.length == swatchCount &&(bothcolorandsize == 'false'||(bothcolorandsize == 'true' && primaryattr == 'Color'))  ){
+							 swatchdisplayed ="Color";
+							 if(serviceResponse.catalogEntryAttributes.attributes[i].allowedValue.length>0){
+							 attributesHTML = attributesHTML + '<div class="item-attributes" style="margin-bottom: 30px;">';
+								attributesHTML = attributesHTML +'<span class="oneSKUAttribute_Title">'+serviceResponse.catalogEntryAttributes.attributes[i].name+':</span><span id= "oneSKUAttribute_heading"></span>';
+								attributesHTML = attributesHTML +  '<div id="swatches_pdp">';
+								if(attributesNum>=1){
+									var count=0;
+									for (var j in serviceResponse.catalogEntryAttributes.attributes[i].allowedValue) {
+										swatchImg="";
+										for (var m in valueArray){
+											if(serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value == valueArray[m]){
+												if (serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].extendedValue) {
+													for (var k in serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].extendedValue) {
+														if (serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].extendedValue[k].key == 'Image1' ) {
+															swatchImg =serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].extendedValue[k].value.trim();
+														}
+													}
+												}
+											}
+										}
+									var isValidValue = (allowedValues[serviceResponse.catalogEntryAttributes.attributes[i].name][serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value] == 1);
+									if (isValidValue && swatchImg != "") {
+										//req 1079-swatches
+										if(count==0){
+											defaultSwatchColor=serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value;
+											categoryDisplayJS.setSelectedAttribute(serviceResponse.catalogEntryAttributes.attributes[i].name.replace(/'/g,"&#039;"),serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value);
+											categoryDisplayJS.setSelectedColor(serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value.replace(/ /g,"&nbsp;"));
+											attributesHTML = attributesHTML +'<div id="color_btn"  class="picked">';
+											//Req-1079 Pending
+											if(bothcolorandsize == 'false'){
+											categoryDisplayJS.changePrice('entitledItem_'+catEntryID+'/',true,false);
+											}
+										}
+										else{
+											attributesHTML = attributesHTML +'<div id="color_btn" >';
+										}
+										//attributesHTML = attributesHTML +'<div id="color_btn" >';
+										count++;
+										attributesHTML = attributesHTML + '<div class="colorpick"> ';
+										//831259 - Edited the width and height as 22px for swatches
+										attributesHTML = attributesHTML +'<a href="JavaScript:categoryDisplayJS.setSelectedAttributeJS(\'' + (serviceResponse.catalogEntryAttributes.attributes[i].name).replace("'","\\'") + '\',\''+serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value.replace(/ /g,"&nbsp;")+'\');updateMoreInfoUrl();categoryDisplayJS.setSwatchAttributeValueForQuickView(\''+serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value.replace(/ /g,"&nbsp;")+'\',\'swatch_link_entitledItem_'+catEntryID+'_'+serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value.replace(/ /g,"&nbsp;")+'\');categoryDisplayJS.changePrice(\'entitledItem_'+catEntryID+'\',true,false); categoryDisplayJS.setSelectedColor(\''+serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value.replace(/ /g,"&nbsp;")+'\');categoryDisplayJS.setSizeSwatchForColor(\'entitledItem_'+catEntryID+'\',\'fromQuickView\');" id="swatch_link_entitledItem_'+catEntryID+'_'+serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value+'"><img id="swatch_link_entitledItem_'+catEntryID+'_'+serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value+'" alt="'+serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value+'" src="'+baseImageUrl.trim().concat(swatchImg).trim()+'" class="color_swatch_selected" style="width: 22px;height:22px"/></a>'
+										attributesHTML = attributesHTML +  '</div></div>';    
+									}														  
+								}
+								}
+								attributesHTML = attributesHTML + '</div>';
+								
+								if(bothcolorandsize == 'true'){
+									var attributeArray = [];
+									var sizeArray = [];
+									var catarray = [];
+									for(var index = 0; index <= serviceResponse.productAttributes.length; index++){
+										if(serviceResponse.productAttributes[index] && serviceResponse.productAttributes[index].Attributes){
+											for(entitledItem in serviceResponse.productAttributes[index].Attributes){
+												var objAttr = dojo.trim(entitledItem);
+												if(objAttr != ""){
+													if(objAttr == 'Color_'+dojo.trim(categoryDisplayJS.selectedColor.replace(/&nbsp;/g," ")))
+													{
+														attributeArray.push(serviceResponse.productAttributes[index].Attributes);
+													}
+												}				
+											}
+											
+										}
+									}
+									for(var index = 0; index <= attributeArray.length; index++){
+										for(entitledItem in attributeArray[index]){
+											var objAttr = dojo.trim(entitledItem);
+											if(objAttr != "" && objAttr.startsWith('Talla')){
+												sizeArray.push(objAttr.substring(6,objAttr.length));
+											}				
+										}
+										
+								}
+									if(sizeArray.length!=0 && sizeArray.length<6){
+										//modified for swatches 1022 req 
+										var sizeSwatchCount=0;
+										for (var a in serviceResponse.catalogEntryAttributes.attributes) {
+											if (serviceResponse.catalogEntryAttributes.attributes[a].usage == "Defining" && serviceResponse.catalogEntryAttributes.attributes[a].attributeIdentifier.externalIdentifier.identifier == 'Talla') {
+												for (var val in serviceResponse.catalogEntryAttributes.attributes[a].allowedValue) {
+													for (var valArr in sizeArray){
+														if(serviceResponse.catalogEntryAttributes.attributes[a].allowedValue[val].value == sizeArray[valArr] ){
+															if (serviceResponse.catalogEntryAttributes.attributes[a].allowedValue[val].extendedValue) {
+																for (var ext in serviceResponse.catalogEntryAttributes.attributes[a].allowedValue[val].extendedValue) {
+																	if (serviceResponse.catalogEntryAttributes.attributes[a].allowedValue[val].extendedValue[ext].key == 'Image1' ) {
+																		sizeSwatchCount++;
+																	}
+																}
+															}
+														}
+													}
+												}
+											}
+										}
+										if(sizeArray.length == sizeSwatchCount ){
+											for (var i in serviceResponse.catalogEntryAttributes.attributes) {
+												if (serviceResponse.catalogEntryAttributes.attributes[i].usage == "Defining" && serviceResponse.catalogEntryAttributes.attributes[i].attributeIdentifier.externalIdentifier.identifier == 'Talla') {
+													attributesHTML = attributesHTML+'<div id="sizeDiv"><span class="oneSKUAttribute_Title">'+serviceResponse.catalogEntryAttributes.attributes[i].name+': </span><span id= "oneSKUAttribute_headingForSize"></span>';
+													attributesHTML = attributesHTML +  '<div id="size_swatches_pdp">';
+													var count=0;
+													for (var j in serviceResponse.catalogEntryAttributes.attributes[i].allowedValue) {
+														swatchImg="";
+														for (var m in sizeArray){
+															if(serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value == sizeArray[m]){
+																if (serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].extendedValue) {
+																	for (var k in serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].extendedValue) {
+																		if (serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].extendedValue[k].key == 'Image1' ) {
+																			swatchImg =serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].extendedValue[k].value.trim();
+																		}
+																	}
+																}
+															}
+														}
+														
+													if (swatchImg != "") {
+														//Req-1079 Pending
+														if(count==0){
+																categoryDisplayJS.setSelectedSizeForQuickView(serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value.replace(/ /g,"&nbsp;"));
+																categoryDisplayJS.changePrice('entitledItem_'+catEntryID+'/',true,false);
+														}
+														
+														//Req-1079 Pending 
+														if (sizeArray.length==1){
+															categoryDisplayJS.setSelectedSize(serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value.replace(/ /g,"&nbsp;"));
+															categoryDisplayJS.setSelectedAttribute('Talla',serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value.replace(/ /g,"&nbsp;"));
+															attributesHTML = attributesHTML +'<div id="color_btn" class="picked" >';
+															
+														}
+														else{
+															attributesHTML = attributesHTML +'<div id="color_btn">';
+														}
+														//attributesHTML = attributesHTML +'<div id="color_btn" >';
+														count++;
+														attributesHTML = attributesHTML + '<div class="colorpick"> ';
+														attributesHTML = attributesHTML +'<a href="JavaScript:categoryDisplayJS.setSelectedAttribute(\'' + (serviceResponse.catalogEntryAttributes.attributes[i].name).replace("'","\\'") + '\',\''+serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value.replace(/ /g,"&nbsp;")+'\');categoryDisplayJS.setSizeCheckedValue(\''+serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value.replace(/ /g,"&nbsp;")+'\');categoryDisplayJS.changePrice(\'entitledItem_'+catEntryID+'\',true,false);" id="'+serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value+'"><img id="swatch_link_entitledItem_'+catEntryID+'_'+serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value+'" alt="'+serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value+'" src="/wcsstore/CencosudStorefrontAssetStore///'+swatchImg.trim()+'" class="color_swatch_selected" /></a>'
+														attributesHTML = attributesHTML +  '</div></div>';   																								 																																																
+													}	
+													}attributesHTML = attributesHTML + '</div></div>';
+												}
+												
+												}
+											/*if(null != document.getElementById("productQuantity")){
+												document.getElementById("productQuantity").style.marginTop="-36px"; 
+											}*/
+											}else{
+
+												if(sizeArray.length>1){
+													if(null != document.getElementById("productQuantity")){
+														document.getElementById("productQuantity").style.marginTop="10px"; 
+													}
+													attributesHTML=attributesHTML+'<div id="sizeDiv"><span class="required-field"> *</span><span class="attr_text">Talla: </span><div class="styled_select" id="PDPAttributeSelect">';
+													//req 1079-swatches
+													attributesHTML=attributesHTML+'<select name="attrValue" class="drop_down_attr"  onChange=JavaScript:categoryDisplayJS.setSelectedAttributeJS("Talla",this.options[this.selectedIndex].value);categoryDisplayJS.changePrice(\'entitledItem_'+catEntryID+'\',true,false);>'
+													attributesHTML=attributesHTML+' <option value="">Selecciona...</option>';
+													for(var i=0; i<sizeArray.length; i++){
+//Req-1079 Pending
+														if(i==0){
+															if(count==0){
+																categoryDisplayJS.setSelectedSizeForQuickView(sizeArray[i].replace(/ /g,"&nbsp;"));
+																categoryDisplayJS.changePrice('entitledItem_'+catEntryID+'/',true,false);
+														}
+														}
+														attributesHTML=attributesHTML+'<option value="'+sizeArray[i]+'"';
+														if(categoryDisplayJS.selectedSize==sizeArray[i]){
+															attributesHTML=attributesHTML+'selected="selected"';
+														}
+														attributesHTML=attributesHTML+'>'+sizeArray[i]+'</option>';
+													}
+													attributesHTML=attributesHTML+'</select></div>';	
+												}else{
+													categoryDisplayJS.setSelectedSize(sizeArray[0]);
+													categoryDisplayJS.setSelectedAttribute('Talla',categoryDisplayJS.selectedSize);
+													attributesHTML =attributesHTML+'<span class="oneSKUAttribute_Title">Talla: </span><span id= "oneSKUAttribute_headingForSize"> '+sizeArray[0]+'</span>';
+												}
+												
+											
+											}
+									
+										
+										
+									}else{
+										if(null != document.getElementById("productQuantity")){
+											document.getElementById("productQuantity").style.marginTop="10px"; 
+										}
+										attributesHTML=attributesHTML+'<div id="sizeDiv"><div class="attribute_list"><span class="required-field"> *</span><span class="attr_text">Talla:</span><div class="styled_select" id="PDPAttributeSelect">';
+										//req 1079-swatches
+										attributesHTML=attributesHTML+'<select name="attrValue" class="drop_down_attr"  onChange=JavaScript:categoryDisplayJS.setSelectedAttributeJS("Talla",this.options[this.selectedIndex].value);categoryDisplayJS.changePrice(\'entitledItem_'+catEntryID+'\',true,false);>'
+										attributesHTML=attributesHTML+' <option value="">Selecciona...</option>';
+										for(var i=0; i<sizeArray.length; i++){
+											attributesHTML=attributesHTML+'<option value="'+sizeArray[i]+'"';
+											if(categoryDisplayJS.selectedSize==sizeArray[i]){
+												attributesHTML=attributesHTML+'selected="selected"';
+											}
+											attributesHTML=attributesHTML+'>'+sizeArray[i]+'</option>';
+										}
+										attributesHTML=attributesHTML+'</select></div></div>';	
+									}
+								}
+								attributesHTML = attributesHTML + '</div>';
+						 }
+								//changes for swatches to display sizes Req#725
+						 } else if(serviceResponse.catalogEntryAttributes.attributes[i].attributeIdentifier.externalIdentifier.identifier == 'Talla' && tallaAttributesNum <=5 && valueSizeArray.length == swatchsizeCount && (bothcolorandsize == 'false'||(bothcolorandsize == 'true' && primaryattr == 'Talla')) ){
+							 if(serviceResponse.catalogEntryAttributes.attributes[i].allowedValue.length>0){
+							 swatchdisplayed ="Talla";
+							//modified for swatches 1022 req start
+							 attributesHTML = attributesHTML + '<div class="item-attributes" style="margin-bottom: 30px;">';
+								attributesHTML = attributesHTML +'<span class="oneSKUAttribute_Title">'+serviceResponse.catalogEntryAttributes.attributes[i].name+':</span><span id= "oneSKUAttribute_headingForSize"></span>';
+								attributesHTML = attributesHTML +  '<div id="size_swatches_pdp">';
+								if(tallaAttributesNum>=1){
+									var count=0;
+									for (var j in serviceResponse.catalogEntryAttributes.attributes[i].allowedValue) {
+										swatchImg="";
+										for (var m in valueSizeArray){
+											if(serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value == valueSizeArray[m]){
+												if (serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].extendedValue) {
+													for (var k in serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].extendedValue) {
+														if (serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].extendedValue[k].key == 'Image1' ) {
+															swatchImg =serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].extendedValue[k].value.trim();
+														}
+													}
+												}
+											}
+										}
+									var isValidValue = (allowedValues[serviceResponse.catalogEntryAttributes.attributes[i].name][serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value] == 1);
+									if (isValidValue && swatchImg != "") {
+										// req-1079 - pending
+										if(count==0){
+												if(bothcolorandsize == 'true'){
+												categoryDisplayJS.setSelectedSize(serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value.replace(/ /g,"&nbsp;"));
+												categoryDisplayJS.setSelectedAttribute('Talla',serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value.replace(/ /g,"&nbsp;"));
+												attributesHTML = attributesHTML +'<div id="color_btn" class="picked">';
+												}else{
+													attributesHTML = attributesHTML +'<div id="color_btn" >';
+												}
+											}else{
+												attributesHTML = attributesHTML +'<div id="color_btn" >';
+											 }
+										//attributesHTML = attributesHTML +'<div id="color_btn" >';
+										count++;
+										attributesHTML = attributesHTML + '<div class="colorpick"> ';
+										attributesHTML = attributesHTML +'<a href="JavaScript:categoryDisplayJS.setSelectedAttributeJS(\'' + (serviceResponse.catalogEntryAttributes.attributes[i].name).replace("'","\\'") + '\',\''+serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value.replace(/ /g,"&nbsp;")+'\');updateMoreInfoUrl();categoryDisplayJS.setSizeCheckedValueForQuickView(\''+serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value.replace(/ /g,"&nbsp;")+'\');categoryDisplayJS.changePrice(\'entitledItem_'+catEntryID+'\',true,false); categoryDisplayJS.setSelectedSize(\''+serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value.replace(/ /g,"&nbsp;")+'\');categoryDisplayJS.setColorSwatchForSize(\'entitledItem_'+catEntryID+'\',\'fromQuickView\');" id="'+serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value+'"><img id="swatch_link_entitledItem_'+catEntryID+'_'+serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value+'" alt="'+serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value+'" src="'+baseImageUrl.trim().concat(swatchImg).trim()+'" class="color_swatch_selected" style="width: 22px;height:22px"/></a>'
+										attributesHTML = attributesHTML +  '</div></div>';    
+									}														  
+								}
+								}
+								attributesHTML = attributesHTML + '</div>';
+								//modified for swatches 1022 req end
+							 if(bothcolorandsize == 'true'){
+									var attributeArray = [];
+									var colorArray = [];
+									var catarray = [];
+									for(var index = 0; index <= serviceResponse.productAttributes.length; index++){
+										if(serviceResponse.productAttributes[index] && serviceResponse.productAttributes[index].Attributes){
+											for(entitledItem in serviceResponse.productAttributes[index].Attributes){
+												var objAttr = dojo.trim(entitledItem);
+												if(objAttr != ""){
+													if(objAttr == 'Talla_'+dojo.trim(categoryDisplayJS.selectedSize.replace(/&nbsp;/g," ")))
+													{
+														attributeArray.push(serviceResponse.productAttributes[index].Attributes);
+													}
+												}				
+											}
+											
+										}
+									}
+									for(var index = 0; index <= attributeArray.length; index++){
+										for(entitledItem in attributeArray[index]){
+											var objAttr = dojo.trim(entitledItem);
+											if(objAttr != "" && objAttr.startsWith('Color')){
+												colorArray.push(objAttr.substring(6,objAttr.length));
+											}				
+										}
+										
+								}
+									if(colorArray.length!=0 && colorArray.length<6){
+										var colorSwatchCount=0;
+										for (var a in serviceResponse.catalogEntryAttributes.attributes) {
+											if (serviceResponse.catalogEntryAttributes.attributes[a].usage == "Defining" && serviceResponse.catalogEntryAttributes.attributes[a].attributeIdentifier.externalIdentifier.identifier == 'Color') {
+												for (var val in serviceResponse.catalogEntryAttributes.attributes[a].allowedValue) {
+													for (var valArr in colorArray){
+														if(serviceResponse.catalogEntryAttributes.attributes[a].allowedValue[val].value == colorArray[valArr] ){
+															if (serviceResponse.catalogEntryAttributes.attributes[a].allowedValue[val].extendedValue) {
+																for (var ext in serviceResponse.catalogEntryAttributes.attributes[a].allowedValue[val].extendedValue) {
+																	if (serviceResponse.catalogEntryAttributes.attributes[a].allowedValue[val].extendedValue[ext].key == 'Image1' ) {
+																		colorSwatchCount++;
+																	}
+																}
+															}
+														}
+													}
+												}
+											}
+										}
+										if(colorArray.length == colorSwatchCount ){
+											for (var i in serviceResponse.catalogEntryAttributes.attributes) {
+												if (serviceResponse.catalogEntryAttributes.attributes[i].usage == "Defining" && serviceResponse.catalogEntryAttributes.attributes[i].attributeIdentifier.externalIdentifier.identifier == 'Color') {
+													attributesHTML = attributesHTML+'<div id="colorDiv"><span class="oneSKUAttribute_Title">'+serviceResponse.catalogEntryAttributes.attributes[i].name+': </span><span id= "oneSKUAttribute_heading"></span>';
+													attributesHTML = attributesHTML +  '<div id="swatches_pdp">';
+													var count=0;
+													for (var j in serviceResponse.catalogEntryAttributes.attributes[i].allowedValue) {
+														swatchImg="";
+														for (var m in colorArray){
+															if(serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value == colorArray[m]){
+																if (serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].extendedValue) {
+																	for (var k in serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].extendedValue) {
+																		if (serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].extendedValue[k].key == 'Image1' ) {
+																			swatchImg =serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].extendedValue[k].value.trim();
+																		}
+																	}
+																}
+															}
+														}
+														
+													if (swatchImg != "") {
+														/* Req-1079 Pending */
+														if(count==0){
+															defaultSwatchColor=serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value;
+															categoryDisplayJS.setSelectedAttribute(serviceResponse.catalogEntryAttributes.attributes[i].name.replace(/'/g,"&#039;"),serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value);
+															categoryDisplayJS.setSelectedColor(serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value.replace(/ /g,"&nbsp;"));
+															attributesHTML = attributesHTML +'<div id="color_btn"  class="picked">';
+															//Req-1079 Pending
+															categoryDisplayJS.changePrice('entitledItem_'+catEntryID+'/',true,false);
+														}
+														else{
+															attributesHTML = attributesHTML +'<div id="color_btn" >';
+														}
+														count++;
+														attributesHTML = attributesHTML + '<div class="colorpick"> ';
+														//attributesHTML = attributesHTML +'<a href="JavaScript:categoryDisplayJS.setSKUImageId("productMainImage");categoryDisplayJS.setSelectedAttribute(\'' + (serviceResponse.catalogEntryAttributes.attributes[i].name).replace("'","\\'") + '\',\''+serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value.replace(/ /g,"&nbsp;")+'\');updateMoreInfoUrl();categoryDisplayJS.setSwatchAttributeValue(\''+serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value+'\',\'swatch_link_entitledItem_'+catEntryID+'_'+serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value.replace(/ /g,"&nbsp;")+'\');categoryDisplayJS.setSelectedColor(\''+serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value.replace(/ /g,"&nbsp;")+'\');categoryDisplayJS.setSizeSwatchForColor(\'entitledItem_'+catEntryID+'\',\'fromQuickView\')categoryDisplayJS.changePrice(\'entitledItem_'+catEntryID+'\',true,false);" id="swatch_link_entitledItem_'+catEntryID+'_'+serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value+'"><img id="swatch_link_entitledItem_'+catEntryID+'_'+serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value+'" alt="'+serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value+'" src="/wcsstore/CencosudStorefrontAssetStore///'+swatchImg.trim()+'" class="color_swatch_selected" /></a>'
+														
+														  attributesHTML = attributesHTML +'<a href=JavaScript:categoryDisplayJS.setSKUImageId("productMainImage");categoryDisplayJS.setSelectedAttribute(\'' + (serviceResponse.catalogEntryAttributes.attributes[i].name).replace("'","\\'") + '\',\''+serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value.replace(/ /g,"&nbsp;")+'\');updateMoreInfoUrl();categoryDisplayJS.setSwatchAttributeValue(\''+serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value.replace(/ /g,"&nbsp;")+'\',\'swatch_link_entitledItem_'+catEntryID+'_'+serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value.replace(/ /g,"&nbsp;")+'\');categoryDisplayJS.setSelectedColor(\''+serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value.replace(/ /g,"&nbsp;")+'\');categoryDisplayJS.changePrice(\'entitledItem_'+catEntryID+'\',true,false); id="swatch_link_entitledItem_'+catEntryID+'_'+serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value+'"><img id="swatch_link_entitledItem_'+catEntryID+'_'+serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value+'" alt="'+serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value+'" src="/wcsstore/CencosudStorefrontAssetStore///'+swatchImg.trim()+'" class="color_swatch_selected" /></a>'
+														  attributesHTML = attributesHTML +  '</div></div>';   																								 																																																
+													}	
+													}attributesHTML = attributesHTML + '</div></div>';
+												}
+												
+												}
+											/*if(null != document.getElementById("productQuantity")){
+												document.getElementById("productQuantity").style.marginTop="-36px"; 
+											}*/
+											}else{
+
+												if(colorArray.length>1){
+													if(null != document.getElementById("productQuantity")){
+														document.getElementById("productQuantity").style.marginTop="10px"; 
+													}
+													attributesHTML=attributesHTML+'<div id="colorDiv"><span class="required-field"> *</span><span class="attr_text">Color: </span><div class="styled_select" id="PDPAttributeSelect">';
+													attributesHTML=attributesHTML+'<select name="attrValue" class="drop_down_attr"  onChange=JavaScript:categoryDisplayJS.setSelectedAttributeJS('+(serviceResponse.catalogEntryAttributes.attributes[i].name).replace("'","\\'")+',this.options[this.selectedIndex].value);categoryDisplayJS.changePrice(\'entitledItem_'+catEntryID+'\',true,false);>'
+													attributesHTML=attributesHTML+' <option value="">Selecciona...</option>';
+													for(var i=0; i<colorArray.length; i++){
+														attributesHTML=attributesHTML+'<option value="'+colorArray[i]+'"';
+														if(categoryDisplayJS.selectedColor==colorArray[i]){
+															attributesHTML=attributesHTML+'selected="selected"';
+														}
+														attributesHTML=attributesHTML+'>'+colorArray[i]+'</option>';
+													}
+													attributesHTML=attributesHTML+'</select></div>';	
+												}else{
+													categoryDisplayJS.setSelectedColor(colorArray[0]);
+													categoryDisplayJS.setSelectedAttribute('Color',categoryDisplayJS.selectedColor);
+													attributesHTML = attributesHTML+ '<span class="oneSKUAttribute_Title">Color: </span><span id= "oneSKUAttribute_heading">'+colorArray[0]+'</span>';
+												}
+												
+											
+											}
+									
+									}else{
+										if(null != document.getElementById("productQuantity")){
+											document.getElementById("productQuantity").style.marginTop="10px"; 
+										}
+										attributesHTML=attributesHTML+'<div id="colorDiv"><div class="attribute_list"><span class="required-field"> *</span><span class="attr_text">Color:</span><div class="styled_select" id="PDPAttributeSelect">';
+										attributesHTML=attributesHTML+'<select name="attrValue" class="drop_down_attr"  onChange=JavaScript:categoryDisplayJS.setSelectedAttributeJS("Color",this.options[this.selectedIndex].value);categoryDisplayJS.selectedColor(this.options[this.selectedIndex].value);categoryDisplayJS.changePrice(\'entitledItem_'+catEntryID+'\',true,false);>'
+										attributesHTML=attributesHTML+' <option value="">Selecciona...</option>';
+										for(var i=0; i<colorArray.length; i++){
+											attributesHTML=attributesHTML+'<option value="'+colorArray[i]+'"';
+											if(categoryDisplayJS.selectedColor==colorArray[i]){
+												attributesHTML=attributesHTML+'selected="selected"';
+											}
+											attributesHTML=attributesHTML+'>'+colorArray[i]+'</option>';
+										}
+										attributesHTML=attributesHTML+'</select></div></div>';	
+									}
+								}
+								attributesHTML = attributesHTML + '</div>';
+							 }
+						 }//Req#725 swatches end
+						 else if((serviceResponse.catalogEntryAttributes.attributes[i].attributeIdentifier.externalIdentifier.identifier!= 'Color' && serviceResponse.catalogEntryAttributes.attributes[i].attributeIdentifier.externalIdentifier.identifier != 'Talla' )|| (bothcolorandsize != 'true') || (swatchdisplayed!= primaryattr)){
+							 attributesHTML = attributesHTML +'<div id="'+serviceResponse.catalogEntryAttributes.attributes[i].name+'">'
+							 attributesHTML = attributesHTML + '<label for="attrValue_'+ i + '" class="nodisplay">'+serviceResponse.catalogEntryAttributes.attributes[i].name.replace(/'/g,"&#039;")+document.getElementById('requiredFieldText').innerHTML+'</label><span class="required-field">* </span><span>' + serviceResponse.catalogEntryAttributes.attributes[i].name.replace(/'/g,"&#039;") + ' : </span>';
+								attributesHTML = attributesHTML + '<div class="styled_select"  ><select name="attrValue" class="drop_down" id="attrValue_' + i + '" onChange="JavaScript:categoryDisplayJS.setSelectedAttributeJS(\'' + (serviceResponse.catalogEntryAttributes.attributes[i].name).replace("'","\\'") + '\',this.options[this.selectedIndex].value);categoryDisplayJS.changePrice(\'entitledItem_'+catEntryID+'\',true,false);updateMoreInfoUrl();';
+								if(serviceResponse.catalogEntryAttributes.attributes[i].attributeIdentifier.externalIdentifier.identifier == primaryattr){
+									attributesHTML = attributesHTML + 'categoryDisplayJS.setAttrForCurrentAttr(\'' + (serviceResponse.catalogEntryAttributes.attributes[i].name).replace("'","\\'") + '\',this.options[this.selectedIndex].value,\'entitledItem_'+catEntryID+'\',\'fromQuickView\');';
+								}
+								attributesHTML = attributesHTML + '">';
+								attributesHTML = attributesHTML + '<option value="">'+document.getElementById("selectText").innerHTML+'</option>';
+								for (var j in serviceResponse.catalogEntryAttributes.attributes[i].allowedValue) {
+									var displayValue = serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value;
+									var selectedAttributeCounter = "";
+									if(document.getElementById("selectedAttr_"+replaceOrderItemId) !=null) {
+										for (var k=0; k<selectedAttributeArray.length; k++) {
+											if (serviceResponse.catalogEntryAttributes.attributes[i].name.replace(/'/g,"&#039;") == selectedAttributeArray[k]) {
+												selectedAttributeCounter = k+1;
+												break;
+											}
+										}
+									}
+										
+									if (serviceResponse.catalogEntryAttributes.attributes[i].attributeIdentifier.externalIdentifier != null && serviceResponse.catalogEntryAttributes.attributes[i].attributeIdentifier.externalIdentifier.identifier == subsTimePeriodAttrName) {
+										var isValidValue = false;
+										for (var m=0; m<validTimePeriodValues.length; m++) {
+											if (serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value == validTimePeriodValues[m]) {
+												isValidValue = true;
+												break;
+											}
+										}
+											
+										var unitOfMeasureKey = "attribute_UOM_";
+										if (serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].extendedValue) {
+											for (var k in serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].extendedValue) {
+												if (serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].extendedValue[k].key == 'UnitOfMeasure') {
+													unitOfMeasureKey = unitOfMeasureKey + serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].extendedValue[k].value;
+												}
+											}
+										}
+										displayValue = document.getElementById(unitOfMeasureKey).innerHTML.replace("{0}",displayValue);
+											
+										if (isValidValue) {
+											if(document.getElementById("selectedAttr_"+replaceOrderItemId) !=null && serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value == selectedAttributeArray[selectedAttributeCounter]){
+												var selected = 'selected';
+												categoryDisplayJS.setSelectedAttribute(serviceResponse.catalogEntryAttributes.attributes[i].name.replace(/'/g,"&#039;"),selectedAttributeArray[selectedAttributeCounter]);
+												categoryDisplayJS.changePrice('entitledItem_'+catEntryID,true,false);
+												updateMoreInfoUrl();
+												attributesHTML = attributesHTML + '<option value="' + serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value.replace('"','inches') +'"selected='+selected+'>' + displayValue + '</option>';
+											} else {
+												attributesHTML = attributesHTML + '<option value="' + serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value.replace('"','inches') +'">' + displayValue + '</option>';	
+											}
+										}
+									} else {
+										//regression issue -quick info view not working for certain categories
+										//var isValidValue = (allowedValues[serviceResponse.catalogEntryAttributes.attributes[i].name][serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value] == 1);
+										var isValidValue = false;
+										if(allowedValues[serviceResponse.catalogEntryAttributes.attributes[i].name] !=undefined){
+											 isValidValue = (allowedValues[serviceResponse.catalogEntryAttributes.attributes[i].name][serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value] == 1);
+										}
+										//regression issue -quick info view not working for certain categories
+										if (isValidValue) {
+											if(document.getElementById("selectedAttr_"+replaceOrderItemId) !=null && serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value == selectedAttributeArray[selectedAttributeCounter]){
+												var selected = 'selected';
+												categoryDisplayJS.setSelectedAttribute(serviceResponse.catalogEntryAttributes.attributes[i].name.replace(/'/g,"&#039;"),selectedAttributeArray[selectedAttributeCounter]);
+												categoryDisplayJS.changePrice('entitledItem_'+catEntryID,true,false);
+												updateMoreInfoUrl();
+												attributesHTML = attributesHTML + '<option value="' + serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value.replace('"','inches') +'"selected='+selected+'>' + displayValue + '</option>';
+											} else{
+												attributesHTML = attributesHTML + '<option value="' + serviceResponse.catalogEntryAttributes.attributes[i].allowedValue[j].value.replace('"','inches') +'">' + displayValue + '</option>';	
+											}
+										}
+									}
+								}
+								attributesHTML = attributesHTML + '</select></div></div>'; 
+						 }
+						
+					}
+				}
+			}
+		} else if (isItemBean || fromComparePageSingleSKU) {
+			var color="";
+			var size="";
+			for(var i in serviceResponse.productAttributes[0].attributes ){
+				if(serviceResponse.productAttributes[0].attributes[i].attrname=='Color'){
+					color=serviceResponse.productAttributes[0].attributes[i].attrvalue;
+				}
+				if(serviceResponse.productAttributes[0].attributes[i].attrname=='Talla'){
+					size=serviceResponse.productAttributes[0].attributes[i].attrvalue;
+				}
+			}
+			for (var attr in serviceResponse.catalogEntryAttributes.attributes) { 
+			 if (serviceResponse.catalogEntryAttributes.attributes[attr].usage == "Defining") {
+				if(serviceResponse.catalogEntryAttributes.attributes[attr].attributeIdentifier.externalIdentifier.identifier == 'Color' && color!=""){
+					if(null != document.getElementById("productQuantity")){
+						document.getElementById("productQuantity").style.marginTop="80px"; 
+					}
+					attributesHTML = attributesHTML + serviceResponse.catalogEntryAttributes.attributes[attr].name + ' : ' + color + '<br />';
+					for (var val in serviceResponse.catalogEntryAttributes.attributes[attr].allowedValue) {
+
+							if(serviceResponse.catalogEntryAttributes.attributes[attr].allowedValue[val].value == color){
+
+								if (serviceResponse.catalogEntryAttributes.attributes[attr].allowedValue[val].extendedValue) {
+
+									for (var ext in serviceResponse.catalogEntryAttributes.attributes[attr].allowedValue[val].extendedValue) {
+
+										if (serviceResponse.catalogEntryAttributes.attributes[attr].allowedValue[val].extendedValue[ext].key == 'Image1' ) {
+
+											swatchImg =serviceResponse.catalogEntryAttributes.attributes[attr].allowedValue[val].extendedValue[ext].value.trim();
+											 attributesHTML = attributesHTML + '<div class="item-attributes">';
+												attributesHTML = attributesHTML +  '<div id="swatches_pdp" style="padding: 0px 0 10px 6px;">';
+												categoryDisplayJS.setSelectedAttribute(serviceResponse.catalogEntryAttributes.attributes[attr].name.replace(/'/g,"&#039;"),color);
+												attributesHTML = attributesHTML +'<div id="color_btn"  class="picked">';
+												attributesHTML = attributesHTML + '<div class="colorpick"> ';
+												attributesHTML = attributesHTML +'<a href="JavaScript:categoryDisplayJS.setSelectedAttributeJS(\'' + (serviceResponse.catalogEntryAttributes.attributes[attr].name).replace("'","\\'") + '\',\''+color.replace(/ /g,"&nbsp;")+'\');updateMoreInfoUrl();categoryDisplayJS.setSwatchAttributeValueForQuickView(\''+serviceResponse.catalogEntryAttributes.attributes[attr].name+'\',\'swatch_link_entitledItem_'+catEntryID+'_'+color.replace(/ /g,"&nbsp;")+'\');categoryDisplayJS.changePrice(\'entitledItem_'+catEntryID+'\',true,false);" id="swatch_link_entitledItem_'+catEntryID+'_'+color+'"><img id="swatch_link_entitledItem_'+catEntryID+'_'+color+'" alt="'+serviceResponse.catalogEntryAttributes.attributes[attr].name+'" src="'+baseImageUrl.trim().concat(swatchImg).trim()+'" class="color_swatch_selected" style="width: 22px;height:22px"/></a>'
+												attributesHTML = attributesHTML +  '</div></div>';    
+												attributesHTML = attributesHTML + '</div></div>';
+											}
+									}
+								}
+							}
+					}
+				}else if (serviceResponse.catalogEntryAttributes.attributes[attr].attributeIdentifier.externalIdentifier.identifier == 'Talla' && size!=""){
+					if(null != document.getElementById("productQuantity")){
+						document.getElementById("productQuantity").style.marginTop="80px"; 
+					}
+					//modified for swatches 1022 req 
+					attributesHTML = attributesHTML + serviceResponse.catalogEntryAttributes.attributes[attr].name + ' : ' + size + '<br />';
+					for (var val in serviceResponse.catalogEntryAttributes.attributes[attr].allowedValue) {
+
+							if(serviceResponse.catalogEntryAttributes.attributes[attr].allowedValue[val].value == size){
+
+								if (serviceResponse.catalogEntryAttributes.attributes[attr].allowedValue[val].extendedValue) {
+
+									for (var ext in serviceResponse.catalogEntryAttributes.attributes[attr].allowedValue[val].extendedValue) {
+
+										if (serviceResponse.catalogEntryAttributes.attributes[attr].allowedValue[val].extendedValue[ext].key == 'Image1' ) {
+
+											swatchImg =serviceResponse.catalogEntryAttributes.attributes[attr].allowedValue[val].extendedValue[ext].value.trim();
+											 attributesHTML = attributesHTML + '<div class="item-attributes">';
+												attributesHTML = attributesHTML +  '<div id="size_swatches_pdp" style="padding: 0px 0 10px 6px;">';
+												categoryDisplayJS.setSelectedAttribute(serviceResponse.catalogEntryAttributes.attributes[attr].name.replace(/'/g,"&#039;"),size);
+												attributesHTML = attributesHTML +'<div id="color_btn"  class="picked">';
+												attributesHTML = attributesHTML + '<div class="colorpick"> ';
+												attributesHTML = attributesHTML +'<a href="JavaScript:categoryDisplayJS.setSelectedAttributeJS(\'' + (serviceResponse.catalogEntryAttributes.attributes[attr].name).replace("'","\\'") + '\',\''+size.replace(/ /g,"&nbsp;")+'\');categoryDisplayJS.setSizeCheckedValueForQuickView(\''+size.replace(/ /g,"&nbsp;")+'\');categoryDisplayJS.changePrice(\'entitledItem_'+catEntryID+'\',true,false);" id="'+size+'"><img id="swatch_link_entitledItem_'+catEntryID+'_'+size+'" alt="'+serviceResponse.catalogEntryAttributes.attributes[attr].name+'" src="'+baseImageUrl.trim().concat(swatchImg).trim()+'" class="color_swatch_selected" style="width: 22px;height:22px"/></a>'
+												attributesHTML = attributesHTML +  '</div></div>';    
+												attributesHTML = attributesHTML + '</div></div>';
+											}
+									}
+								}
+							}
+					}
+				}
+				else{
+					for(var othr in serviceResponse.productAttributes[0].attributes ){
+						if(serviceResponse.productAttributes[0].attributes[othr].attrname== serviceResponse.catalogEntryAttributes.attributes[attr].name){
+							attributesHTML = attributesHTML + serviceResponse.catalogEntryAttributes.attributes[attr].name + ' : ' + serviceResponse.productAttributes[0].attributes[othr].attrvalue + '<br />';
+						}
+						
+					}
+				}
+			 }
+			}
+		}  
+		
+		if (attributesHTML != '') {
+			attributesHTML = attributesHTML + '<br />';
+		}
+		if (isProductBean) {
+			if(dojo.isIE) {
+				var container = document.getElementById('productAttributes');
+				if (container.hasChildNodes()) {
+					container.removeChild(container.firstChild);
+				}
+				var newDiv = document.createElement("div");
+				newDiv.innerHTML = attributesHTML;				
+				container.appendChild(newDiv);
+			} else {
+				document.getElementById('productAttributes').innerHTML = attributesHTML;
+			}
+			//req#725 changes for swatches start 
+			for(var c in serviceResponse.catalogEntryAttributes.attributes) {
+				if(serviceResponse.catalogEntryAttributes.attributes[c].name == 'Color'  && defaultSwatchColor !="" ){
+					 categoryDisplayJS.setSwatchAttributeValue(defaultSwatchColor);
+					 defaultSwatchColor ="";
+				 }
+			}
+			//req#725 changes for swatches end 
+		}
+		
+		if(isItemBean) {
+			document.getElementById('itemAttributes').innerHTML = attributesHTML;
+		}
+		
+		dojo.query("select.drop_down").connect("onchange", function(){
+			this.blur();
+		})
+		
+		
+		if(isBundleBean){
+			if(document.getElementById('productPopUpQty')){
+				document.getElementById('productPopUpQty').disabled = true;
+			}
+			document.getElementById('productActions').style.display = 'none';
+			document.getElementById('moreinfo').style.display = 'block';
+		}
+		else{
+			document.getElementById('productActions').style.display = 'block';
+			document.getElementById('moreinfo').style.display = 'none';
+			
+			categoryDisplayJS.setCurrentCatalogEntryId(catEntryID);
+			if (isProductBean && singleSKUProduct) {
+				categoryDisplayJS.setCurrentCatalogEntryId(singleSKUProduct_catEntryId);
+			}
+			
+			if(isDynamicKitBean){
+				if(hasComponents){
+					if(document.getElementById('productSpecification')){
+						document.getElementById('productSpecification').style.display='block';
+						var componentsHTML ='';
+						for(var k in serviceResponse.catalogEntry.components){
+							componentsHTML = componentsHTML + '<li>'+serviceResponse.catalogEntry.components[k];
+						}					
+						document.getElementById('productSpec').innerHTML = componentsHTML;
+					}
+				}else{
+					if(document.getElementById('productSpecification')){
+						document.getElementById('productSpecification').style.display='none';
+					}
+				}
+			}else{
+				if(document.getElementById('productSpecification')){
+					document.getElementById('productSpecification').style.display='none';
+				}
+			}
+			
+			//Populate the links for adding items/products/packages to requisition list
+			if(isProductBean){
+				if(document.getElementById('addToNewRequisitionList')){
+					if (singleSKUProduct) {
+						categoryDisplayJS.setCurrentPageType("item");
+						document.getElementById('addToNewRequisitionListContainer').style.display='block';
+						document.getElementById('addToExistingRequisitionListContainer').style.display='block';
+						document.getElementById('addToNewRequisitionList').href = "javascript:categoryDisplayJS.addItemToNewListFromProductDetail('" + singleSKUProduct_catEntryId + "', 'productPopUpQty', document.location.href);";
+						document.getElementById('addToExistingRequisitionList').href = "javascript:RequisitionList.showReqListPopup('productPopUpQty');";
+					} else {
+						categoryDisplayJS.setCurrentPageType("product");
+						document.getElementById('addToNewRequisitionListContainer').style.display='block';
+						document.getElementById('addToExistingRequisitionListContainer').style.display='block';
+						document.getElementById('addToNewRequisitionList').href = "javascript:categoryDisplayJS.addToNewListFromProductDetail('entitledItem_"+catEntryID+"', 'productPopUpQty', document.location.href);";
+						document.getElementById('addToExistingRequisitionList').href = "javascript:RequisitionList.showReqListPopupForItem('entitledItem_"+catEntryID+"', 'productPopUpQty');";
+					}
+				}				
+			} else if(isItemBean || isPackageBean || isDynamicKitBean){
+				if(document.getElementById('addToNewRequisitionList')){
+					if(isItemBean){
+						categoryDisplayJS.setCurrentPageType("item");
+					} else if(isPackageBean){
+						categoryDisplayJS.setCurrentPageType("package");
+					} else{
+						categoryDisplayJS.setCurrentPageType("dynamicKit");
+					}
+					if(isDynamicKitBean && !showAddToCart){
+						document.getElementById('addToNewRequisitionListContainer').style.display='none';
+						document.getElementById('addToExistingRequisitionListContainer').style.display='none';
+					}else{
+						document.getElementById('addToNewRequisitionListContainer').style.display='block';
+						document.getElementById('addToExistingRequisitionListContainer').style.display='block';
+						document.getElementById('addToNewRequisitionList').href = "javascript:categoryDisplayJS.addItemToNewListFromProductDetail('" + catEntryID + "', 'productPopUpQty', document.location.href);";
+						document.getElementById('addToExistingRequisitionList').href = "javascript:RequisitionList.showReqListPopup('productPopUpQty');";
+					}
+				}		
+			}
+		}
+		
+		if(isDynamicKitBean){
+			if(showConfigure){
+				document.getElementById('configureButton').style.display='block';
+				document.getElementById('configure').href="JavaScript:categoryDisplayJS.ConfigureDynamicKit('"+catEntryID+"',document.getElementById('productPopUpQty').value);";
+			}else{
+				document.getElementById('configureButton').style.display='none';
+			}
+		}else{
+			document.getElementById('configureButton').style.display='none';
+		}
+		
+		// Setup addToCart button
+		if(isBundleBean){
+			// Disable add to cart for Bundles in all cases
+			if(document.getElementById('addToCartAjaxButton')){
+				document.getElementById('addToCartAjaxButton').style.display='none';
+			} else if(document.getElementById('addToCartButton')){
+				document.getElementById('addToCartButton').style.display='none';
+			}
+		} else if(isDynamicKitBean && !showAddToCart){
+			if(document.getElementById('addToCartAjaxButton')){
+				document.getElementById('addToCartAjaxButton').style.display='none';
+			} else if(document.getElementById('addToCartButton')){
+				document.getElementById('addToCartButton').style.display='none';
+			}
+		} else {
+			var addtoCart;
+			if(document.getElementById('addToCartLinkAjax')){
+				if(isProductBean) {
+					if (singleSKUProduct) {
+						addtoCart = document.getElementById('addToCartLinkAjax');
+						addtoCart.href = "JavaScript:categoryDisplayJS.AddItem2ShopCartAjax('"+singleSKUProduct_catEntryId+"',document.getElementById('productPopUpQty').value); hidePopup('second_level_category_popup');";
+					} else {
+						addtoCart = document.getElementById('addToCartLinkAjax');	
+						addtoCart.href = "JavaScript:categoryDisplayJS.Add2ShopCartAjax('entitledItem_"+catEntryID+"',document.getElementById('productPopUpQty').value, true);";
+					}
+				}else if(isDynamicKitBean) {
+					addtoCart = document.getElementById('addToCartLinkAjax');
+					addtoCart.href = "JavaScript:categoryDisplayJS.AddItem2ShopCartAjax('"+catEntryID+"',document.getElementById('productPopUpQty').value,{catalogEntryType: 'dynamicKit'}); hidePopup('second_level_category_popup');";
+				} else {
+					addtoCart = document.getElementById('addToCartLinkAjax');
+					addtoCart.href = "JavaScript:categoryDisplayJS.AddItem2ShopCartAjax('"+catEntryID+"',document.getElementById('productPopUpQty').value); hidePopup('second_level_category_popup');";
+				}
+			}
+			if(document.getElementById('addToCartLinkAjax_QuickInfoDisplay')){
+				if(isProductBean) {
+					if (singleSKUProduct) {
+						addtoCart = document.getElementById('addToCartLinkAjax_QuickInfoDisplay');
+						addtoCart.href = "JavaScript:categoryDisplayJS.AddItem2ShopCartAjax('"+singleSKUProduct_catEntryId+"',document.getElementById('productPopUpQty').value); hidePopup('second_level_category_popup');";
+					} else {
+						addtoCart = document.getElementById('addToCartLinkAjax_QuickInfoDisplay');	
+						addtoCart.href = "JavaScript:categoryDisplayJS.Add2ShopCartAjax('entitledItem_"+catEntryID+"',document.getElementById('productPopUpQty').value, true);";
+					}
+				}else if(isDynamicKitBean) {
+					addtoCart = document.getElementById('addToCartLinkAjax_QuickInfoDisplay');
+					addtoCart.href = "JavaScript:categoryDisplayJS.AddItem2ShopCartAjax('"+catEntryID+"',document.getElementById('productPopUpQty').value,{catalogEntryType: 'dynamicKit'}); hidePopup('second_level_category_popup');";
+				} else {
+					addtoCart = document.getElementById('addToCartLinkAjax_QuickInfoDisplay');
+					addtoCart.href = "JavaScript:categoryDisplayJS.AddItem2ShopCartAjax('"+catEntryID+"',document.getElementById('productPopUpQty').value); hidePopup('second_level_category_popup');";
+				}
+			}
+			if(document.getElementById('addToCartLink')){
+				if(isProductBean) {
+					addtoCart = document.getElementById('addToCartLink');
+					addtoCart.href = "#";
+					//Must dynamically set the onclick event as follows for IE6
+					if (singleSKUProduct) {
+						addtoCart.onclick = new Function("categoryDisplayJS.AddItem2ShopCart(document.getElementById('OrderItemAddForm_"+singleSKUProduct_catEntryId+"'),document.getElementById('productPopUpQty').value); hidePopup('second_level_category_popup');return false;");
+					} else {
+						addtoCart.onclick = new Function("categoryDisplayJS.Add2ShopCart('entitledItem_"+catEntryID+"',document.getElementById('OrderItemAddForm_"+catEntryID+"'),document.getElementById('productPopUpQty').value, true); return false;");
+					}
+				} else {
+					addtoCart = document.getElementById('addToCartLink');
+					addtoCart.href = "#";
+					//Must dynamically set the onclick event as follows for IE6
+					addtoCart.onclick = new Function("categoryDisplayJS.AddItem2ShopCart(document.getElementById('OrderItemAddForm_"+catEntryID+"'),document.getElementById('productPopUpQty').value); hidePopup('second_level_category_popup');return false;");
+				}
+			}
+		}
+
+		
+		if (document.getElementById('addToWishListLinkAjax')) {
+			if(isItemBean || isPackageBean || isDynamicKitBean){
+				document.getElementById('addToWishListLinkAjax').href = "JavaScript:categoryDisplayJS.AddItem2WishListAjax("+catEntryID+"); hidePopup('second_level_category_popup');";
+			} else if (isProductBean && singleSKUProduct) {
+				document.getElementById('addToWishListLinkAjax').href = "JavaScript:categoryDisplayJS.AddItem2WishListAjax("+singleSKUProduct_catEntryId+"); hidePopup('second_level_category_popup');";
+			} else {
+				document.getElementById('addToWishListLinkAjax').href = "JavaScript:categoryDisplayJS.Add2WishListAjax('entitledItem_"+catEntryID+"'); hidePopup('second_level_category_popup');";
+			}
+		} else if(document.getElementById('addToWishListLink')) {
+			document.getElementById('addToWishListLink').href = "#";
+			//Must dynamically set the onclick event as follows for IE6
+			if(isItemBean || isPackageBean || isDynamicKitBean){
+				document.getElementById('addToWishListLink').onclick = new Function("categoryDisplayJS.AddItem2WishList(document.getElementById('OrderItemAddForm_"+catEntryID+"'));hidePopup('second_level_category_popup');return false;");
+			} else if (isProductBean && singleSKUProduct) {
+				document.getElementById('addToWishListLink').onclick = new Function("categoryDisplayJS.AddItem2WishList(document.getElementById('OrderItemAddForm_"+singleSKUProduct_catEntryId+"'));hidePopup('second_level_category_popup');return false;");
+			} else {
+				document.getElementById('addToWishListLink').onclick = new Function("categoryDisplayJS.Add2WishList('entitledItem_"+catEntryID+"',document.getElementById('OrderItemAddForm_"+catEntryID+"')); hidePopup('second_level_category_popup');return false;");
+			}
+		}
+		if (document.getElementById('addToCompareLink')) {
+			document.getElementById('addToCompareLink').href = "JavaScript:compareProductJS.Add2CompareAjax('"+catEntryID+"', '" + serviceResponse.productCompareImagePath +"', '" + serviceResponse.catalogEntryURL+ "','"+serviceResponse.compareImageDescription+"'); delayHidePopup();";
+		}
+		if (document.getElementById('replaceCartItemAjax')) {
+			document.getElementById('replaceCartItemAjax').href = "JavaScript:dojo.byId('" + changeAttrId + "').disabled=1; if (dojo.byId('" + changeContractId + "') != null) {dojo.byId('" + changeContractId + "').disabled=1;} categoryDisplayJS.ReplaceItemAjax('entitledItem_"+catEntryID+"',document.getElementById('productPopUpQty').value); hidePopup('second_level_category_popup'); ";
+		}
+		if (document.getElementById('replaceCartItemNonAjax')) {
+			document.getElementById('replaceCartItemNonAjax').href = "#";
+			//Must dynamically set the onclick event as follows for IE6			
+			document.getElementById('replaceCartItemNonAjax').onclick = new Function("categoryDisplayJS.ReplaceItemNonAjax('entitledItem_"+catEntryID+"',document.getElementById('productPopUpQty').value,document.getElementById('ReplaceItemForm')); hidePopup('second_level_category_popup');return false;");
+		}
+
+		if(dojo.trim(serviceResponse.catalogEntry.displayAddToCartButton)=="false"){
+			//Start : Manhattan States Code Changes	 
+			//document.getElementById('addToCartLinkAjax').style.display = "none";
+			//End : Manhattan States Code Changes	 
+			document.getElementById('availability_msg_qv').style.display = "block";
+			document.getElementById('productQuantity_qv').style.display = "none";
+			document.getElementById('availability_msg_qv').innerHTML = serviceResponse.catalogEntry.availabe_msg;
+		}else{
+			document.getElementById('availability_msg_qv').style.display = "none";
+			document.getElementById('addToCartLinkAjax').style.display = "block";
+			
+			if (showQTYBox){
+				document.getElementById('productQuantity_qv').style.display = "block";
+			}
+		}
+		
+		gobackFocus();//set the default focus to the Close button
+		dojo.publish("ajaxRequestCompleted");
+	}
+	
+	/**
+	 *  This function is used to dynamically update the more info link url based on the selection of attributes in the 
+	 *  Quickinfo popup.
+	 */
+
+	function updateMoreInfoUrl() {
+			document.getElementById('productMoreInfoLink').href = categoryDisplayJS.moreInfoUrl;
+	}
+	/** 
+	 * Reset all contents of the Product Quick Info pop-up.
+	 * This dialog will be re-used across all products on the page.
+	 */			
+	function resetPopUp() {
+		if (document.getElementById('productName')) document.getElementById('productName').innerHTML = "";
+		document.getElementById('productPrice').innerHTML = "";
+		document.getElementById('productLongDescription').innerHTML = "";
+		document.getElementById('productDescriptiveAttributes').innerHTML = "";
+		document.getElementById('productSKUValue').innerHTML = "";
+		document.getElementById('productMoreInfoLink').href = "";
+		document.getElementById('productPromotions').innerHTML = "";
+        if ( typeof(isBrazilStore) != 'undefined' && isBrazilStore ){
+        	dojo.byId('free_shipping_promotion_div').innerHTML = "";
+        	dojo.byId('BrazilCatalogEntryFeaturedInstallmentOption').innerHTML = "";
+        	dojo.style(dojo.byId('BrazilCatalogEntryFeaturedInstallmentOption'),"display","inline");
+        	dojo.byId('BrazilFeaturedNonPaymentPromotion').innerHTML = "";
+            
+
+        }
+        
+		if (document.getElementById('productPopUpQty')){
+			document.getElementById('productPopUpQty').disabled = false;
+			document.getElementById('productPopUpQty').value = "1";
+		}
+		
+		if (document.getElementById('productAttributes')) {
+			document.getElementById('productAttributes').innerHTML = "";
+		}
+		
+		if (document.getElementById('itemAttributes')) {
+			document.getElementById('itemAttributes').innerHTML = "";
+		}
+		
+		if (document.getElementById('addToCartLinkAjax')) {
+			document.getElementById('addToCartLinkAjax').href = "";
+			document.getElementById('addToCartLinkAjax').style.display = "block";
+		} else if (document.getElementById('addToCartLink')) {
+			document.getElementById('addToCartLink').href = "";
+		}
+		
+		if (document.getElementById('addToWishListLinkAjax')) {
+			document.getElementById('addToWishListLinkAjax').href = "";
+		} else if (document.getElementById('addToWishListLink')) {
+			document.getElementById('addToWishListLink').href = "";
+		}
+		
+		if (document.getElementById('addToCompareLink')) {
+			document.getElementById('addToCompareLink').href = "";
+		}
+		
+		if(document.getElementById('replaceCartItemAjax')){
+			document.getElementById('replaceCartItemAjax').href= "";
+		} else if(document.getElementById('replaceCartItemNonAjax')){
+			document.getElementById('replaceCartItemNonAjax').href = "";
+		}
+		if(document.getElementById('addToCartAjaxButton')){
+			document.getElementById('addToCartAjaxButton').style.display='none';
+		} else if(document.getElementById('addToCartButton')){
+			document.getElementById('addToCartButton').style.display='none';
+		}
+		if(document.getElementById('skuNotBuyableButton')){
+			document.getElementById('skuNotBuyableButton').style.display='none';
+		}
+		//set the default product image - NoImageIcon.jpg
+		if (dojo.byId('baseUrlImageDir')){
+		    var baseImageUrl = dojo.trim(dojo.byId('baseUrlImageDir').innerHTML);
+		    var productImg = dojo.byId('productFullImage_quickInfo');
+		   // productImg.src = baseImageUrl + "images/NoImageIcon.jpg";
+		    dojo.style(productImg,'display','none');
+
+		}
+		categoryDisplayJS.selectedAttributes = new Object();
+		categoryDisplayJS.selectedProducts = new Object();
+	}
+	
+	/** 
+	 * Hides the Product Quick Info pop-up.
+	 * 
+	 * @param {string} id The id of the Product Quick Info pop-up to hide.
+	 * @param {object} event The event triggered from user actions.
+	 */		
+	function hidePopup(id,event){
+	if(event!=null && event.type=="keypress" && event.keyCode!="27"){
+			return;
+		}else{		
+			var quickInfo = dijit.byId(id), productImg = dojo.byId('productFullImage_quickInfo');
+
+			if(quickInfo != null){
+				var add2CartModal = (id == 'modal_popup_pdp') && dijit.byId('second_level_category_popup');		
+
+
+				quickInfo.hide();
+				hideOverView();
+				
+				productImg.style.display = 'none';
+				dojo.style(dojo.query('.quick_info_img_placeholder')[0], 'display', '');
+				if (add2CartModal) {
+					var add2CartDomNode = add2CartModal.domNode;
+					 if (!add2CartModal._isShown()) {
+					 	add2CartModal._relativePosition = {t: 0, l: 0};  // Quick fix for reseting the dijit.Dialog position
+					 	add2CartModal.show();
+					 } 
+					//dojo.style(add2CartDomNode, 'opacity', 1); dojo.style(add2CartDomNode, 'display', 'block');
+				}
+
+			}
+		}
+	}
+
+
+	function hideAddToCartPopup() {
+		if(dijit.byId('add_to_cart_popup')){
+			dijit.byId('add_to_cart_popup').hide();
+			hideOverView();
+		}
+	}
+
+	/** 
+	 * Stores the identifier of the order item which is the candidate for replacement.
+	 * 
+	 * @param {string} changeOrderItemId The id of the order item to be replaced.
+	 */	
+	function saveChangeOrderItemId(changeOrderItemId){
+		replaceOrderItemId = changeOrderItemId;
+	}
+
+	/** 
+	 * Defines the list of actions that show up in the Product Quick Info pop-up.
+	 * Each property corresponds to an action.
+	 * Default settings show the first 3 links.
+	 */	
+	function popupActionProperties() {
+		this.showAddToCart = true;
+		this.showWishList = true;
+		this.showProductCompare = true;
+		this.showReplaceCartItem = false;
+	}
+
+	/** 
+	 * Transfers the focus to the "Close" button,
+	 * when pressing the <Tab> key on the last focusable element in the Product Quick Info pop-up.
+	 */	
+	function gobackFocus() {
+		document.getElementById('closeLink').focus();
+	}
+
+	/** 
+	 * Transfers the focus to the last focusable element present in the Product Quick Info pop-up,
+	 * when pressing the <Shift+Tab> keys on the "Close" button.
+	 */		
+	function setbackFocus(event) {
+		if(event.shiftKey && event.keyCode == dojo.keys.TAB)
+		{
+			if(document.getElementById('replaceCartItemNonAjax') && document.getElementById('replaceCartItemNonAjax').style.display!="none") {
+				document.getElementById('replaceCartItemNonAjax').focus();
+			} else if(document.getElementById('replaceCartItemAjax') && document.getElementById('replaceCartItemAjax').style.display!="none") {
+				document.getElementById('replaceCartItemAjax').focus();
+			} else if(document.getElementById('addToCompareLink') && document.getElementById('addToCompareLink').style.display!="none") {
+				document.getElementById('addToCompareLink').focus();
+			} else if(document.getElementById('addToWishListLink') && document.getElementById('addToWishListLink').style.display!="none") {
+				document.getElementById('addToWishListLink').focus();
+			} else if(document.getElementById('addToWishListLinkAjax') && document.getElementById('addToWishListLinkAjax').style.display!="none") {
+				document.getElementById('addToWishListLinkAjax').focus();
+			} else {
+				document.getElementById('productMoreInfoLink').focus();
+			}
+			
+			dojo.stopEvent(event);
+		}
+	}
+	
+	/** 
+	 * Triggers a call to the hidePopup() function after a delay of a certain amount of time.
+	 */			
+	function delayHidePopup() {
+		setTimeout(dojo.hitch(this,"hidePopup",'second_level_category_popup'),200);
+	}
